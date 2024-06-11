@@ -1,10 +1,10 @@
 from sqlalchemy import select, create_engine
 from sqlalchemy.orm import Session
 
-from profiler.config import init_db
-from profiler.core import answer_question
-from profiler.model import Question, Region, Geography, TimeAxis
-from profiler.helpers import print_record
+from spacerat.config import init_db
+from spacerat.core import answer_question
+from spacerat.model import Question, Region, Geography, TimeAxis
+from spacerat.helpers import print_record
 
 
 # file_engine = create_engine("sqlite:///spacerat.db")

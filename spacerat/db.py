@@ -6,7 +6,7 @@ import psycopg2
 import psycopg2.extras
 from psycopg2.sql import Composable
 
-from profiler.const import DATASTORE_URL_ENV_VAR
+from spacerat.const import DATASTORE_URL_ENV_VAR
 
 connection_string = os.environ.get(DATASTORE_URL_ENV_VAR)
 

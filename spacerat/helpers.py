@@ -1,6 +1,6 @@
 from datetime import timedelta
 
-from profiler.types import QuestionResultsRow
+from spacerat.types import QuestionResultsRow
 
 
 def print_record(record: QuestionResultsRow):

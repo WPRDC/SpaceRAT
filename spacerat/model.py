@@ -12,9 +12,9 @@ from sqlalchemy.orm import (
     attribute_keyed_dict,
 )
 
-from profiler import db
-from profiler.helpers import parse_period_name
-from profiler.types import TemporalResolution, DataType, TemporalDomain
+from spacerat import db
+from spacerat.helpers import parse_period_name
+from spacerat.types import TemporalResolution, DataType, TemporalDomain
 
 _combine_dt = datetime.datetime.combine
 

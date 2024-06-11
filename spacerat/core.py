@@ -1,6 +1,6 @@
-from profiler import db
-from profiler.model import Question, TimeAxis, DataType, Region
-from profiler.types import QuestionResultsRow
+from spacerat import db
+from spacerat.model import Question, TimeAxis, DataType, Region
+from spacerat.types import QuestionResultsRow
 
 
 def _aggregate_fields(datatype: DataType) -> str:

@@ -4,7 +4,7 @@ from slugify import slugify
 
 from ckanapi import RemoteCKAN
 
-from profiler.model import Question
+from spacerat.model import Question
 
 ckan_url = os.environ.get("CKAN_URL", "https://data.wprdc.org")
 

@@ -5,7 +5,7 @@ import yaml
 from sqlalchemy import create_engine, select, Engine
 from sqlalchemy.orm import Session
 
-from profiler.model import Base, Source, Question, Geography, QuestionSource
+from spacerat.model import Base, Source, Question, Geography, QuestionSource
 
 script_dir = Path(__file__).parent.resolve().parent.resolve()
 sources_dir = script_dir / "model" / "sources"
