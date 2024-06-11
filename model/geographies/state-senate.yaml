@@ -1,0 +1,12 @@
+id: state-senate
+name: PA Senate District
+table: state_senate_index
+subgeographies:
+  - parcel
+query: >
+  SELECT
+      "GEOID" as id,
+      "NAMELSAD" as name,
+      _geom as geom,
+      st_centroid(_geom) as centroid
+  FROM "c7906d31-9f79-4fe4-894e-3441f3dabf3e";

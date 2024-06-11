@@ -1,0 +1,15 @@
+id: county-subdivision
+name: County Subdivision
+table: county_subdivision_index
+subgeographies:
+  - neighborhood
+  - tract
+  - blockgroup
+  - parcel
+query: >
+  SELECT "GEOID"            as id,
+         "NAMELSAD"         as name,
+         _geom              as geom,
+         st_centroid(_geom) as centroid
+  FROM "e86e5f45-3a28-429b-af53-1802a1db7243"
+  WHERE "STATEFP" = '42';

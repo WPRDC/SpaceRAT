@@ -1,0 +1,11 @@
+id: blockgroup
+name: Block Group
+table: blockgroup_index
+subgeographies:
+  - parcel
+query: >
+  SELECT "GEOID"            as id,
+         "NAMELSAD"         as name,
+         _geom              as geom,
+         st_centroid(_geom) as centroid
+  FROM "c07b1fcd-1662-4517-ab7b-eb73de4accee";

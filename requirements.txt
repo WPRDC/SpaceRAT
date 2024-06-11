@@ -1,0 +1,5 @@
+pyyaml
+psycopg2
+python-slugify
+sqlalchemy
+ckanapi

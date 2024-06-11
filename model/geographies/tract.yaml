@@ -1,0 +1,13 @@
+id: tract
+name: Census Tract
+table: tract_index
+subgeographies:
+  - blockgroup
+  - parcel
+query: >
+  SELECT
+      "GEOID" as id,
+      "NAMELSAD" as name,
+      _geom as geom,
+      st_centroid(_geom) as centroid
+  FROM "21b7b0ec-fef6-4bc7-8120-8926554d2578";
