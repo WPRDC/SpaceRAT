@@ -1,15 +1,18 @@
+import typing
 from datetime import timedelta
 from typing import Iterable
 
-from spacerat.types import QuestionResultsRow, DataType
+if typing.TYPE_CHECKING:
+    from spacerat.model import Geography
+    from spacerat.types import QuestionResultsRow, DataType
 
 
-def print_records(records: Iterable[QuestionResultsRow]) -> None:
+def print_records(records: Iterable["QuestionResultsRow"]) -> None:
     for record in records:
         print_record(record)
 
 
-def print_record(record: QuestionResultsRow) -> None:
+def print_record(record: "QuestionResultsRow") -> None:
     print(record["time"].isoformat())
     for k, v in record.items():
         if k == "time":
@@ -36,7 +39,7 @@ def parse_period_name(period_name: str) -> timedelta:
     raise ValueError("Invalid time period.")
 
 
-def get_aggregate_fields(datatype: DataType) -> str:
+def get_aggregate_fields(datatype: "DataType") -> str:
     if datatype == "continuous":
         return """
           AVG(value)                                            as mean,
@@ -59,3 +62,20 @@ def get_aggregate_fields(datatype: DataType) -> str:
       MODE() WITHIN GROUP (ORDER BY value) as mode,
       COUNT(value)                         as n
     """
+
+
+def get_variant_clause(
+    subgeog: "Geography",
+    variant: str = None,
+) -> str:
+    # optionally, get extra clause to filter for variant
+    variant_clause = None
+    if variant is not None and variant in subgeog.variants:
+        variant_clause = subgeog.variants[variant].where_clause
+
+    if variant_clause:
+        variant_clause = "AND " + variant_clause
+    else:
+        variant_clause = ""
+
+    return variant_clause

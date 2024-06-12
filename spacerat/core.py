@@ -8,8 +8,8 @@ from sqlalchemy.orm import Session
 
 from spacerat import db
 from spacerat.config import init_db
-from spacerat.helpers import get_aggregate_fields
-from spacerat.model import Question, TimeAxis, Region, Geography, Source
+from spacerat.helpers import get_aggregate_fields, get_variant_clause
+from spacerat.model import Question, TimeAxis, Region, Geography, Source, RegionSet
 from spacerat.types import QuestionResultsRow
 
 DEFAULT_ENGINE = create_engine("sqlite://")
@@ -94,7 +94,7 @@ class SpaceRAT:
     def answer_question(
         self,
         question: str | Question,
-        region: str | Region,
+        region: str | Region | Sequence[Region] | RegionSet,
         time_axis: TimeAxis = None,
         variant: str = None,
     ) -> list[QuestionResultsRow]:
@@ -118,17 +118,32 @@ class SpaceRAT:
         _question: Question = (
             question if isinstance(question, Question) else self.get_question(question)
         )
-        _region: Region = (
-            region if isinstance(region, Region) else self.get_region(region)
-        )
+
+        # single region
+        if isinstance(region, str) or isinstance(region, Region):
+            _region: Region = (
+                region if isinstance(region, Region) else self.get_region(region)
+            )
+
+            if not time_axis:
+                time_axis = TimeAxis(
+                    question.get_temporal_resolution(_region.geog_level),
+                    "current",
+                )
+
+            return self._answer_question(_question, _region, time_axis, variant=variant)
+
+        # if not a single region, convert to RegionSet
+        regions = region if isinstance(region, RegionSet) else RegionSet(region)
 
         if not time_axis:
             time_axis = TimeAxis(
-                question.get_temporal_resolution(_region.geog_level),
+                question.get_temporal_resolution(regions.geog_level),
                 "current",
             )
-
-        return self._answer_question(_question, _region, time_axis, variant=variant)
+        return self._answer_question_across_regions(
+            _question, regions, time_axis, variant=variant
+        )
 
     def _get_obj(self, model: Type[T], oid: str) -> T | None:
         try:
@@ -150,6 +165,82 @@ class SpaceRAT:
             print(e)
             return None
 
+    def _answer_question_across_regions(
+        self,
+        question: Question,
+        regions: RegionSet,
+        time_axis: TimeAxis,
+        variant: str = None,
+    ) -> list[QuestionResultsRow]:
+        """Finds result for question across multiple regions across points across time axis."""
+
+        # find subgeog that works for this question, could be region if it directly answers it
+        geog: Geography = regions.geog_level
+        subgeog: Geography = regions.geog_level.get_subgeography_for_question(question)
+
+        # generate  query that results in region, parent table
+        variant_clause = get_variant_clause(subgeog, variant)
+        subregions_query = f"""
+            SELECT subregion."{subgeog.id_field}" as subregion_id,
+                   parent."{geog.id_field}" as parent_id
+                   
+            FROM "{subgeog.table}" subregion 
+              JOIN "{geog.table}" parent 
+                ON ST_Covers(parent.geom, subregion.centroid)
+                
+            WHERE parent."{geog.id_field}" IN ({regions.sql_list}) {variant_clause}
+            """.strip()
+
+        # there's no spatial aggregation when the geog has not been subdivided
+        no_spatial_agg: bool = geog.id == subgeog.id
+
+        # get query to get question table at this level
+        question_source = question.get_source(subgeog)
+        source_query = question_source.source_query
+
+        #  truncate time to spatial resolution to ensure clean aggregation
+        temporal_resolution = question_source.source.temporal_resolution
+
+        # determine fields to request based on datatype
+        if no_spatial_agg:
+            stat_fields = (
+                "MIN(value) as value"  # will only have one result so same as value
+            )
+        else:
+            stat_fields = get_aggregate_fields(question.datatype)
+
+        # query the datastore for the question, aggregating data from smaller subregions if necessary
+        # returns a set of records representing the answers for the question for the region across time
+        # with a granularity specified in the questions `temporal resolution`
+        group_by = "time, parent_id"
+        time_selection = "time"
+        time_filter = (
+            f"""WHERE "time" {time_axis.domain_filter}"""
+            if time_axis.domain_filter
+            else ""
+        )
+
+        # handle aggregation across time
+        if no_spatial_agg and temporal_resolution != time_axis.resolution:
+            group_by += ", parent_region"
+            time_selection = "MIN(time) as start_time, MAX(time) as end_time"
+
+        # todo: replace all with SQLAlchemy once we know what we're doin'
+        values: list[QuestionResultsRow] = db.query(
+            f"""
+          SELECT {time_selection}, {stat_fields},  '{geog.id}.' || "parent_id" as region
+          FROM (SELECT date_trunc('{temporal_resolution}', "time") as "time",  "value", "region", regions."parent_id"
+                 FROM ({source_query}) as data 
+                   JOIN ({subregions_query}) as regions
+                     ON data.region = regions.subregion_id                
+                   
+                 {time_filter}) as filtered
+          GROUP BY {group_by}
+          """
+        )
+
+        return values
+
     def _answer_question(
         self,
         question: Question,
@@ -161,9 +252,8 @@ class SpaceRAT:
 
         # find subgeog that works for this question, could be region if it directly answers it
         subgeog = region.geog_level.get_subgeography_for_question(question)
-
         # get set of regions of with subgeog type that fit within region
-        region_list = list(region.get_subregions(subgeog, variant=variant))
+        region_list = region.get_subregions(subgeog, variant=variant).as_list()
         no_spatial_agg = bool(len(region_list) == 1)
 
         # get query to get question table at this level

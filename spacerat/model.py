@@ -1,6 +1,6 @@
 import datetime
 from dataclasses import dataclass
-from typing import Optional, Union
+from typing import Optional, Union, Iterable, Sequence
 
 from sqlalchemy import String, Text, ForeignKey, DateTime, Table, Column
 from sqlalchemy.orm import (
@@ -12,7 +12,7 @@ from sqlalchemy.orm import (
 )
 
 from spacerat import db
-from spacerat.helpers import parse_period_name
+from spacerat.helpers import parse_period_name, get_variant_clause
 from spacerat.types import TemporalResolution, DataType, TemporalDomain
 
 _combine_dt = datetime.datetime.combine
@@ -237,6 +237,7 @@ class Geography(Base):
         return None
 
 
+@dataclass
 class TimeAxis:
     """Defines temporal resolution and domain being requested by user."""
 
@@ -341,6 +342,29 @@ class TimeAxis:
             return None
 
 
+class RegionSet:
+    """Collection of regions of same geographic level."""
+
+    def __init__(self, regions: Sequence["Region"]) -> None:
+        for region in regions:
+            if not hasattr(self, "geog_level"):
+                self.geog_level = region.geog_level
+            elif self.geog_level != region.geog_level:
+                raise ValueError(
+                    "Regions in a RegionSet must all be of the same Geography."
+                )
+            if not hasattr(self, "feature_ids"):
+                self.feature_ids = set([])
+            self.feature_ids.add(region.feature_id)
+
+    def as_list(self) -> list["Region"]:
+        return [Region(self.geog_level, fid) for fid in self.feature_ids]
+
+    @property
+    def sql_list(self) -> str:
+        return ", ".join([f"'{fid}'" for fid in self.feature_ids])
+
+
 @dataclass
 class Region:
     """A specific feature of a geography type.
@@ -361,30 +385,22 @@ class Region:
         self,
         subgeog: "Geography",
         variant: str = None,
-    ) -> set["Region"]:
+    ) -> "RegionSet":
         """Get list of IDs for subregions of this region of a specific geography."""
         if subgeog == self.geog_level:
-            return {self}
+            return RegionSet([self])
 
         # optionally, get extra clause to filter for variant
-        variant_clause = None
-        if variant is not None and variant in subgeog.variants:
-            variant_clause = subgeog.variants[variant].where_clause
-
-        if variant_clause:
-            variant_clause = "AND " + variant_clause
-        else:
-            variant_clause = ""
+        variant_clause = get_variant_clause(subgeog, variant)
 
         # query the data source db
         results: list[[str]] = db.query(
             f"""SELECT {subgeog.id_field} 
                 FROM "{subgeog.table}" 
-                WHERE ST_Intersects(({self.geom_query}), "{subgeog.table}".geom) 
+                WHERE ST_Covers(({self.geom_query}), "{subgeog.table}".centroid) 
                     {variant_clause}"""
         )
-
-        return set(subgeog.get_region(row[subgeog.id_field]) for row in results)
+        return RegionSet([subgeog.get_region(row[subgeog.id_field]) for row in results])
 
     def __hash__(self):
         return hash((self.geog_level, self.feature_id))
