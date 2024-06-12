@@ -17,10 +17,7 @@ def query(
     with psycopg2.connect(connection_string) as conn:
         qry = str(re.sub(r"\s+", " ", q).strip())
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            cur.mogrify(qry, vars or {})
-
             cur.execute(qry, vars)
-
             results = cur.fetchall()
     conn.close()
     return results
