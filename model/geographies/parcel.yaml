@@ -15,6 +15,7 @@ query: >
          sub.state,
          sub.zip,
          sub.address,
+         sub.owner_occupied,
          sub.geom,
          sub.centroid,
          (sub.parcel_id || ' '::text) || sub.address AS _full_text
@@ -31,8 +32,19 @@ query: >
                (((((((assessment."PROPERTYHOUSENUM" || ' '::text) || assessment."PROPERTYADDRESS") || ' '::text) ||
                    assessment."PROPERTYCITY") || ' '::text) || assessment."PROPERTYSTATE") || ' '::text) ||
                assessment."PROPERTYZIP"      AS address,
+               (assessment."HOMESTEADFLAG" IS NOT NULL
+                OR assessment."CHANGENOTICEADDRESS1" ILIKE assessment."PROPERTYHOUSENUM" || '%') AS owner_occupied,
                boundary._geom                AS geom,
                st_centroid(boundary._geom)   AS centroid
         FROM "65855e14-549e-4992-b5be-d629afc676fa" assessment
                  JOIN "3f50d47a-ab54-4da2-9f03-8519006e9fc9" boundary
                       ON assessment."PARID" = boundary."PIN") sub;
+variants:
+  residential: >
+    "class" LIKE 'RESIDENTIAL'
+  commercial: >
+    "class" LIKE 'RESIDENTIAL'
+  industrial: >
+    "class" LIKE 'INDUSTRIAL'
+  owner_occupied: >
+    "owner_occupied"

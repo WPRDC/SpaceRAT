@@ -3,7 +3,6 @@ from dataclasses import dataclass
 from typing import Optional, Union
 
 from sqlalchemy import String, Text, ForeignKey, DateTime, Table, Column
-from sqlalchemy.ext.associationproxy import AssociationProxy, association_proxy
 from sqlalchemy.orm import (
     DeclarativeBase,
     Mapped,
@@ -172,6 +171,16 @@ geography_association = Table(
 )
 
 
+class GeographyVariant(Base):
+    __tablename__ = "geography_variant"
+
+    id: Mapped[str] = mapped_column(String(120), primary_key=True)
+    geography_id: Mapped[str] = mapped_column(
+        ForeignKey("geography.id"), primary_key=True
+    )
+    where_clause: Mapped[str] = mapped_column(Text())
+
+
 class Geography(Base):
     """Represents a type of place, or a geographic level.
 
@@ -180,18 +189,33 @@ class Geography(Base):
 
     __tablename__ = "geography"
 
+    # slug
     id: Mapped[str] = mapped_column(String(120), primary_key=True)
 
+    # human-friendly name
     name: Mapped[str] = mapped_column(String(120))
+
+    # the query used to make this geog's index table
     query: Mapped[str] = mapped_column(String(120), nullable=True)
+
+    # the name of this geog's index table
     table: Mapped[str] = mapped_column(String(120), nullable=True)
+
+    # the field in `table` that holds region IDs for this geography
     id_field: Mapped[str] = mapped_column(String(120), default="id")
 
+    # the geographies that perfectly subdivide this geography
     subgeographies: Mapped[list["Geography"]] = relationship(
         "Geography",
         secondary=geography_association,
         primaryjoin=id == geography_association.c.parent_id,
         secondaryjoin=id == geography_association.c.child_id,
+        lazy="immediate",
+    )
+
+    variants: Mapped[dict[str, "GeographyVariant"]] = relationship(
+        collection_class=attribute_keyed_dict("id"),
+        cascade="all, delete-orphan",
         lazy="immediate",
     )
 
@@ -333,18 +357,33 @@ class Region:
             f"SELECT geom FROM {self.geog_level.table} WHERE id = '{self.feature_id}'"
         )
 
-    def get_subregions(self, subgeog: "Geography") -> set["Region"]:
+    def get_subregions(
+        self,
+        subgeog: "Geography",
+        variant: str = None,
+    ) -> set["Region"]:
         """Get list of IDs for subregions of this region of a specific geography."""
         if subgeog == self.geog_level:
             return {self}
 
-        subgeog_table = subgeog.table
+        # optionally, get extra clause to filter for variant
+        variant_clause = None
+        if variant is not None and variant in subgeog.variants:
+            variant_clause = subgeog.variants[variant].where_clause
 
+        if variant_clause:
+            variant_clause = "AND " + variant_clause
+        else:
+            variant_clause = ""
+
+        # query the data source db
         results: list[[str]] = db.query(
             f"""SELECT {subgeog.id_field} 
-                FROM "{subgeog_table}" 
-                WHERE ST_Intersects(({self.geom_query}), "{subgeog_table}".geom) """
+                FROM "{subgeog.table}" 
+                WHERE ST_Intersects(({self.geom_query}), "{subgeog.table}".geom) 
+                    {variant_clause}"""
         )
+
         return set(subgeog.get_region(row[subgeog.id_field]) for row in results)
 
     def __hash__(self):

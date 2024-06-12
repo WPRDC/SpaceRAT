@@ -5,7 +5,14 @@ import yaml
 from sqlalchemy import select, Engine
 from sqlalchemy.orm import Session
 
-from spacerat.model import Base, Source, Question, Geography, QuestionSource
+from spacerat.model import (
+    Base,
+    Source,
+    Question,
+    Geography,
+    QuestionSource,
+    GeographyVariant,
+)
 
 _engine: Engine
 
@@ -21,8 +28,14 @@ def _load_source(**kwargs) -> Source:
 
 
 def _load_geog(**kwargs) -> Geography:
+    variants = kwargs.get("variants", {})
     del kwargs["subgeographies"]
-    return Geography(**kwargs, subgeographies=[])
+    if "variants" in kwargs:
+        del kwargs["variants"]
+    geog = Geography(**kwargs, subgeographies=[])
+    for variant, clause in variants.items():
+        geog.variants[variant] = GeographyVariant(id=variant, where_clause=clause)
+    return geog
 
 
 def _load_question(**kwargs) -> Question:
@@ -50,7 +63,7 @@ def _load_question(**kwargs) -> Question:
     return question
 
 
-def init_model(config_dir: PathLike, loader) -> None:
+def _init_model(config_dir: PathLike, loader) -> None:
     """Loads all model object files in a directory."""
     config_dir = Path(config_dir)
     with Session(_engine) as session:
@@ -73,21 +86,21 @@ def init_db(engine: Engine, model_dir: PathLike) -> Engine:
     questions_dir = model_dir / "questions"
 
     # (re)Build database
-    Base.metadata.drop_all(engine)
-    Base.metadata.create_all(engine)
+    Base.metadata.drop_all(_engine)
+    Base.metadata.create_all(_engine)
 
     # load Sources
-    init_model(sources_dir, _load_source)
+    _init_model(sources_dir, _load_source)
 
     # load Geographies
-    init_model(geogs_dir, _load_geog)
+    _init_model(geogs_dir, _load_geog)
 
     # link geogs
     for filename in geogs_dir.glob("*.yaml"):
         with open(geogs_dir / filename) as f:
             config = yaml.safe_load(f)
 
-            with Session(engine) as session:
+            with Session(_engine) as session:
                 geog = session.scalars(
                     select(Geography).where(Geography.id == config["id"])
                 ).first()
@@ -100,5 +113,5 @@ def init_db(engine: Engine, model_dir: PathLike) -> Engine:
                         geog.subgeographies.append(subgeog)
                     session.commit()
 
-    init_model(questions_dir, _load_question)
-    return engine
+    _init_model(questions_dir, _load_question)
+    return _engine

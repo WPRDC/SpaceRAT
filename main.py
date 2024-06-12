@@ -13,10 +13,10 @@ if __name__ == "__main__":
     shadyside = neighborhoods.get_region("shadyside")
     bloomfield = neighborhoods.get_region("bloomfield")
 
-    print(question)
+    print(question.name)
 
-    records = rat.answer_question(question, shadyside)
-    print_records(records)
+    print_records(rat.answer_question(question, shadyside))
 
-    records = rat.answer_question(question, bloomfield)
-    print_records(records)
+    print_records(rat.answer_question(question, bloomfield))
+
+    print_records(rat.answer_question(question, shadyside, variant="residential"))

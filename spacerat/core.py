@@ -30,28 +30,34 @@ class SpaceRAT:
         """
         Initialize a SpaceRAT instance.
 
-        :param engine: SQLAlchemy engine to manage the SpaceRAT model. Defaults to in-memory sqlite engine.
+        :param engine: SQLAlchemy engine to manage the SpaceRAT model.
+                         Defaults to in-memory sqlite engine.
+
+        :param model_dir: Directory from which to load model configuration files.
         """
-        self.engine = engine or DEFAULT_ENGINE
+        _engine = engine or DEFAULT_ENGINE
         if debug:
-            self.engine.echo = True
-        init_db(self.engine, model_dir)
+            _engine.echo = True
+        self.engine = init_db(_engine, model_dir)
 
     def get_source(self, sid: str) -> Source | None:
         """Returns the Source object with id `sid`"""
         return self._get_obj(Source, sid)
 
     def get_question(self, qid: str) -> Question | None:
+        """Returns the Question object with id `qid`"""
         return self._get_obj(Question, qid)
 
-    def get_geography(self, *args, **kwargs):
+    def get_geography(self, gid: str) -> Geography | None:
         """Alias for get_geog"""
-        return self.get_geog(*args, **kwargs)
+        return self.get_geog(gid)
 
     def get_geog(self, gid: str) -> Geography | None:
+        """Returns the Geography object with id `gid`"""
         return self._get_obj(Geography, gid)
 
     def get_region(self, rid: str) -> Region | None:
+        """Returns the Region object with id `rid`"""
         gid = rid.split(".")[0]
         fid = rid.split(".")[1]
         geog = self.get_geog(gid)
@@ -61,22 +67,28 @@ class SpaceRAT:
         self,
         *where_clause: ColumnExpressionArgument,
     ) -> Sequence[Source]:
+        """Returns set of Sources filtered by where clause"""
         return self._get_objs(Source, *where_clause)
 
     def get_questions(
         self,
         *where_clause: ColumnExpressionArgument,
     ) -> Sequence[Question]:
+        """Returns set of Questions filtered by where clause"""
         return self._get_objs(Question, *where_clause)
 
-    def get_geographies(self, *args, **kwargs):
+    def get_geographies(
+        self,
+        *where_clause: ColumnExpressionArgument,
+    ) -> Sequence[Geography]:
         """Alias for get_geogs"""
-        return self.get_geog(*args, **kwargs)
+        return self.get_geogs(*where_clause)
 
     def get_geogs(
         self,
         *where_clause: ColumnExpressionArgument,
     ) -> Sequence[Geography]:
+        """Returns set of Geographies filtered by where clause"""
         return self._get_objs(Geography, *where_clause)
 
     def answer_question(
@@ -84,7 +96,25 @@ class SpaceRAT:
         question: str | Question,
         region: str | Region,
         time_axis: TimeAxis = None,
+        variant: str = None,
     ) -> list[QuestionResultsRow]:
+        """
+        Finds the descriptive statistics of `question` for `region` across `time_axis`.
+
+
+        :param question: The Question to find statistics for. Can directly provide object or reference by ID.
+
+        :param region: The Region to find statistics of `question` for. Can directly provide object or reference by ID.
+
+        :param time_axis: (optional) Time axis across which stats will be calculated. Defaults to the most recent period
+                            of time that matches the question's source's temporal resolution.
+
+        :param variant: (optional) Geographic variant to use when calculating the statistics. Filters set of
+                            subgeographies considered in calculations.
+
+        :return: A list results by time periods from the time axis. Statistics available in results depends on
+                    underlying data type.
+        """
         _question: Question = (
             question if isinstance(question, Question) else self.get_question(question)
         )
@@ -98,7 +128,7 @@ class SpaceRAT:
                 "current",
             )
 
-        return self._answer_question(_question, _region, time_axis)
+        return self._answer_question(_question, _region, time_axis, variant=variant)
 
     def _get_obj(self, model: Type[T], oid: str) -> T | None:
         try:
@@ -125,6 +155,7 @@ class SpaceRAT:
         question: Question,
         region: Region,
         time_axis: TimeAxis,
+        variant: str = None,
     ) -> list[QuestionResultsRow]:
         """Finds result for question at geog across points across time axis."""
 
@@ -132,7 +163,7 @@ class SpaceRAT:
         subgeog = region.geog_level.get_subgeography_for_question(question)
 
         # get set of regions of with subgeog type that fit within region
-        region_list = list(region.get_subregions(subgeog))
+        region_list = list(region.get_subregions(subgeog, variant=variant))
         no_spatial_agg = bool(len(region_list) == 1)
 
         # get query to get question table at this level
