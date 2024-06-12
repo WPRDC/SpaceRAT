@@ -1,27 +1,22 @@
-from sqlalchemy import select, create_engine
-from sqlalchemy.orm import Session
-
-from spacerat.config import init_db
-from spacerat.core import answer_question
-from spacerat.model import Question, Region, Geography, TimeAxis
-from spacerat.helpers import print_record
-
-
-# file_engine = create_engine("sqlite:///spacerat.db")
+from spacerat.core import SpaceRAT
+from spacerat.helpers import print_records
 
 if __name__ == "__main__":
-    engine = init_db()
+    # initializing without args will use an in-memory sql db to hold the model,and will load the model
+    # from files found in ./model relative to the current working directory (not necessarily this file)
+    rat = SpaceRAT()
 
-    with Session(engine) as session:
-        question = session.scalars(select(Question)).first()
-        print(question)
-        shadyside = (
-            session.scalars(select(Geography).where(Geography.id.ilike("neighborhood")))
-            .first()
-            .get_region("shadyside")
-        )
-        result = answer_question(
-            question, shadyside, TimeAxis(resolution="month", domain="current")
-        )
+    question = rat.get_question("fair-market-assessed-value")
 
-        print_record(result)
+    neighborhoods = rat.get_geog("neighborhood")
+
+    shadyside = neighborhoods.get_region("shadyside")
+    bloomfield = neighborhoods.get_region("bloomfield")
+
+    print(question)
+
+    records = rat.answer_question(question, shadyside)
+    print_records(records)
+
+    records = rat.answer_question(question, bloomfield)
+    print_records(records)

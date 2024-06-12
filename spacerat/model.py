@@ -37,7 +37,7 @@ class Question(Base):
     name: Mapped[str] = mapped_column(String(100))
     datatype: Mapped[DataType] = mapped_column(String(20))
     sources: Mapped[list["QuestionSource"]] = relationship(
-        back_populates="question", cascade="all, delete-orphan"
+        back_populates="question", cascade="all, delete-orphan", lazy="selectin"
     )
 
     def __repr__(self):
@@ -68,6 +68,11 @@ class Question(Base):
                 return qs
         return None
 
+    def get_temporal_resolution(self, geog: "Geography") -> TemporalResolution:
+        qs = self.get_source(geog)
+        if qs:
+            return qs.source.temporal_resolution
+
     @staticmethod
     def from_config(**kwargs):
         spatial_domain = kwargs["spatial_domain"]
@@ -91,7 +96,9 @@ class QuestionSource(Base):
 
     # related models
     question: Mapped["Question"] = relationship(back_populates="sources")
-    source: Mapped["Source"] = relationship(back_populates="questions")
+    source: Mapped["Source"] = relationship(
+        back_populates="questions", lazy="immediate"
+    )
 
     # associated data
     value_select: Mapped[str] = mapped_column(Text())
@@ -185,6 +192,7 @@ class Geography(Base):
         secondary=geography_association,
         primaryjoin=id == geography_association.c.parent_id,
         secondaryjoin=id == geography_association.c.child_id,
+        lazy="immediate",
     )
 
     def __repr__(self):

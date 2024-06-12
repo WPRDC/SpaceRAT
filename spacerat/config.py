@@ -2,17 +2,12 @@ from os import PathLike
 from pathlib import Path
 
 import yaml
-from sqlalchemy import create_engine, select, Engine
+from sqlalchemy import select, Engine
 from sqlalchemy.orm import Session
 
 from spacerat.model import Base, Source, Question, Geography, QuestionSource
 
-script_dir = Path(__file__).parent.resolve().parent.resolve()
-sources_dir = script_dir / "model" / "sources"
-geogs_dir = script_dir / "model" / "geographies"
-questions_dir = script_dir / "model" / "questions"
-
-_engine = create_engine("sqlite://", echo=True)
+_engine: Engine
 
 
 def _load_source(**kwargs) -> Source:
@@ -45,7 +40,8 @@ def _load_question(**kwargs) -> Question:
                 select(Source).where(Source.id == source_config["source_id"])
             ).first()
             question_source = QuestionSource(
-                geography=geog, value_select=source_config["value_select"]
+                geography=geog,
+                value_select=source_config["value_select"],
             )
             question_source.source = source
             question.sources.append(question_source)
@@ -68,13 +64,22 @@ def init_model(config_dir: PathLike, loader) -> None:
         session.commit()
 
 
-def init_db(engine: Engine = None) -> Engine:
+def init_db(engine: Engine, model_dir: PathLike) -> Engine:
     global _engine
-    if engine:
-        _engine = engine
-    Base.metadata.drop_all(_engine)
-    Base.metadata.create_all(_engine)
+    _engine = engine
+    model_dir = Path(model_dir)
+    sources_dir = model_dir / "sources"
+    geogs_dir = model_dir / "geographies"
+    questions_dir = model_dir / "questions"
+
+    # (re)Build database
+    Base.metadata.drop_all(engine)
+    Base.metadata.create_all(engine)
+
+    # load Sources
     init_model(sources_dir, _load_source)
+
+    # load Geographies
     init_model(geogs_dir, _load_geog)
 
     # link geogs
@@ -82,7 +87,7 @@ def init_db(engine: Engine = None) -> Engine:
         with open(geogs_dir / filename) as f:
             config = yaml.safe_load(f)
 
-            with Session(_engine) as session:
+            with Session(engine) as session:
                 geog = session.scalars(
                     select(Geography).where(Geography.id == config["id"])
                 ).first()
@@ -96,4 +101,4 @@ def init_db(engine: Engine = None) -> Engine:
                     session.commit()
 
     init_model(questions_dir, _load_question)
-    return _engine
+    return engine

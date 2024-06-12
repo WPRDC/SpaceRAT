@@ -1,5 +1,1 @@
-from sqlalchemy import Engine
-
-
-class SpaceRAT:
-    engine: Engine
+from .core import SpaceRAT
