@@ -3,7 +3,7 @@ from datetime import timedelta
 from typing import Iterable
 
 if typing.TYPE_CHECKING:
-    from spacerat.model import Geography
+    from spacerat.model import Geography, Question
     from spacerat.types import QuestionResultsRow, DataType
 
 
@@ -39,28 +39,29 @@ def parse_period_name(period_name: str) -> timedelta:
     raise ValueError("Invalid time period.")
 
 
-def get_aggregate_fields(datatype: "DataType") -> str:
-    if datatype == "continuous":
-        return """
-          AVG(value)                                            as mean,
-          MODE() WITHIN GROUP (ORDER BY value)                  as mode,
+def get_aggregate_fields(question: "Question") -> str:
+    field_name = question.field_name
+    if question.datatype == "continuous":
+        return f"""
+          AVG({field_name})                                          as {field_name}__mean,
+          MODE() WITHIN GROUP (ORDER BY {field_name})                as {field_name}__mode,
 
-          MIN(value)                                            as min,
-          percentile_cont(0.25) WITHIN GROUP ( ORDER BY value ) as first_quartile,
-          percentile_cont(0.5) WITHIN GROUP ( ORDER BY value )  as median,
-          percentile_cont(0.75) WITHIN GROUP ( ORDER BY value ) as third_quartile,
-          MAX(value)                                            as max,
+          MIN({field_name})                                          as {field_name}__min,
+          percentile_cont(0.25) WITHIN GROUP (ORDER BY {field_name}) as {field_name}__first_quartile,
+          percentile_cont(0.5) WITHIN GROUP (ORDER BY {field_name})  as {field_name}__median,
+          percentile_cont(0.75) WITHIN GROUP (ORDER BY {field_name}) as {field_name}__third_quartile,
+          MAX({field_name})                                          as {field_name}__max,
 
-          stddev_pop(value)                                     as stddev,
+          stddev_pop({field_name})                                   as {field_name}__stddev,
 
-          SUM(value)                                            as sum,
-          COUNT(*)                                              as n
+          SUM({field_name})                                          as {field_name}__sum,
+          COUNT(*)                                                   as {field_name}__n
         """
 
     # discrete can only do mode and count
-    return """
-      MODE() WITHIN GROUP (ORDER BY value) as mode,
-      COUNT(value)                         as n
+    return f"""
+      MODE() WITHIN GROUP (ORDER BY {field_name}) as mode,
+      COUNT(*)                                    as n
     """
 
 
@@ -79,3 +80,7 @@ def get_variant_clause(
         variant_clause = ""
 
     return variant_clause
+
+
+def as_field_name(fid: str) -> str:
+    return fid.replace("-", "_").strip()

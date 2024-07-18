@@ -1,6 +1,6 @@
 import datetime
 from dataclasses import dataclass
-from typing import Optional, Union, Iterable, Sequence
+from typing import Optional, Union, Sequence, Literal, Iterator
 
 from sqlalchemy import String, Text, ForeignKey, DateTime, Table, Column
 from sqlalchemy.orm import (
@@ -10,12 +10,14 @@ from sqlalchemy.orm import (
     relationship,
     attribute_keyed_dict,
 )
+from typing_extensions import Tuple
 
-from spacerat import db
-from spacerat.helpers import parse_period_name, get_variant_clause
+from spacerat.helpers import parse_period_name, as_field_name, get_aggregate_fields
 from spacerat.types import TemporalResolution, DataType, TemporalDomain
 
 _combine_dt = datetime.datetime.combine
+
+# SQLAlchemy Models
 
 
 class Base(DeclarativeBase):
@@ -44,6 +46,22 @@ class Question(Base):
             f"Question(id={self.id!r}, name={self.name!r}, datatype={self.datatype!r})"
         )
 
+    def __eq__(self, other):
+        if isinstance(other, Question):
+            return self.id == other.id
+        return False
+
+    def __hash__(self):
+        return hash(self.id)
+
+    @property
+    def field_name(self):
+        return as_field_name(self.id)
+
+    @property
+    def aggregate_select_chunk(self) -> str:
+        return get_aggregate_fields(self)
+
     @property
     def spatial_resolutions(self) -> list[str]:
         """The geographic levels this question directly describes"""
@@ -61,14 +79,24 @@ class Question(Base):
                 return True
         return False
 
-    def get_source(self, geog: "Geography") -> Optional["QuestionSource"]:
-        for qs in self.sources:
-            if qs.source.spatial_resolution == geog.id:
-                return qs
+    def get_question_source_for_geog(
+        self, geog: "Geography"
+    ) -> Optional["QuestionSource"]:
+        """Returns QuestionSource at `geog` level if it exists."""
+        for qsource in self.sources:
+            if qsource.source.spatial_resolution == geog.id:
+                return qsource
         return None
 
+    def get_source_and_subgeog(
+        self, geog: "Geography"
+    ) -> Tuple[Optional["Source"], Optional["Geography"]]:
+        subgeog = geog.get_subgeography_for_question(self)
+        qsource = self.get_question_source_for_geog(subgeog)
+        return qsource.source, subgeog
+
     def get_temporal_resolution(self, geog: "Geography") -> TemporalResolution:
-        qs = self.get_source(geog)
+        qs = self.get_question_source_for_geog(geog)
         if qs:
             return qs.source.temporal_resolution
 
@@ -94,7 +122,9 @@ class QuestionSource(Base):
     )
 
     # related models
-    question: Mapped["Question"] = relationship(back_populates="sources")
+    question: Mapped["Question"] = relationship(
+        back_populates="sources", lazy="immediate"
+    )
     source: Mapped["Source"] = relationship(
         back_populates="questions", lazy="immediate"
     )
@@ -104,13 +134,16 @@ class QuestionSource(Base):
     geography: Mapped["Geography"] = relationship()
 
     @property
-    def source_query(self):
-        return f"""
-          SELECT ({self.source.region_select})  as "region",
-                 ({self.source.time_select})    as "time",
-                 ({self.value_select})          as "value"
-          FROM {self.source.table}
-        """.strip()
+    def value_clause(self) -> str:
+        return f"""{self.value_select} as "{self.field_name}" """
+
+    @property
+    def field_name(self) -> str:
+        return as_field_name(self.question.id)
+
+    @property
+    def raw_field(self):
+        return self.value_select
 
 
 class Source(Base):
@@ -160,7 +193,10 @@ class Source(Base):
             spatial_domain_str = ",".join(spatial_domain)
         return Source(**config, spatial_domain_str=spatial_domain_str)
 
-    # def __init__(self, **kwargs):
+    def __eq__(self, other):
+        if isinstance(other, Source):
+            return self.id == other.id
+        return False
 
 
 geography_association = Table(
@@ -222,19 +258,25 @@ class Geography(Base):
     def __repr__(self):
         return f"Geography(id={self.id!r}, name={self.name!r}, table={self.table!r})"
 
+    def __eq__(self, other):
+        return self.id == other.id
+
     def get_region(self, fid: str) -> "Region":
         return Region(geog_level=self, feature_id=fid)
 
     def get_subgeography_for_question(
-        self, question: "Question"
+        self, q: Union["Question", "QuestionSet"]
     ) -> Optional["Geography"]:
         """Find subgeography that question can be directly answered at if any"""
-        if question.directly_describes(self):
+        if q.directly_describes(self):
             return self
         for subgeog in self.subgeographies:
-            if question.directly_describes(subgeog):
+            if q.directly_describes(subgeog):
                 return subgeog
         return None
+
+
+# Dataclasses
 
 
 @dataclass
@@ -342,29 +384,6 @@ class TimeAxis:
             return None
 
 
-class RegionSet:
-    """Collection of regions of same geographic level."""
-
-    def __init__(self, regions: Sequence["Region"]) -> None:
-        for region in regions:
-            if not hasattr(self, "geog_level"):
-                self.geog_level = region.geog_level
-            elif self.geog_level != region.geog_level:
-                raise ValueError(
-                    "Regions in a RegionSet must all be of the same Geography."
-                )
-            if not hasattr(self, "feature_ids"):
-                self.feature_ids = set([])
-            self.feature_ids.add(region.feature_id)
-
-    def as_list(self) -> list["Region"]:
-        return [Region(self.geog_level, fid) for fid in self.feature_ids]
-
-    @property
-    def sql_list(self) -> str:
-        return ", ".join([f"'{fid}'" for fid in self.feature_ids])
-
-
 @dataclass
 class Region:
     """A specific feature of a geography type.
@@ -381,26 +400,151 @@ class Region:
             f"SELECT geom FROM {self.geog_level.table} WHERE id = '{self.feature_id}'"
         )
 
-    def get_subregions(
-        self,
-        subgeog: "Geography",
-        variant: str = None,
-    ) -> "RegionSet":
-        """Get list of IDs for subregions of this region of a specific geography."""
-        if subgeog == self.geog_level:
-            return RegionSet([self])
-
-        # optionally, get extra clause to filter for variant
-        variant_clause = get_variant_clause(subgeog, variant)
-
-        # query the data source db
-        results: list[[str]] = db.query(
-            f"""SELECT {subgeog.id_field} 
-                FROM "{subgeog.table}" 
-                WHERE ST_Covers(({self.geom_query}), "{subgeog.table}".centroid) 
-                    {variant_clause}"""
-        )
-        return RegionSet([subgeog.get_region(row[subgeog.id_field]) for row in results])
-
     def __hash__(self):
         return hash((self.geog_level, self.feature_id))
+
+
+# Collections
+
+
+class QuestionSet:
+    """Collection of Questions from the same source."""
+
+    def __init__(self, source: "Source", *questions: "Question"):
+        self.source: Source = source
+        self.questions: set["Question"] = set([])
+
+        for question in questions:
+            self.add_question(question)
+
+    def add_question(self, question: "Question") -> None:
+        self._validate_question(question)
+        self.questions.add(question)
+
+    def _validate_question(self, question: "Question") -> None:
+        if self.source.id not in [qs.source.id for qs in question.sources]:
+            raise ValueError(
+                "Questions in QuestionSet must all share a common source. "
+                f"Test failed for {question}"
+            )
+
+    def directly_describes(self, geog: "Geography") -> bool:
+        return self.source.spatial_resolution == geog.id
+
+    def get_query_at_geog(self, geog: "Geography") -> str:
+        """Returns a query for table of raw data for each question across the regions and time axis."""
+        # the raw value select statements chunks for each of the questions in this set
+        question_select_chunks = [
+            q.get_question_source_for_geog(geog).value_clause for q in self.questions
+        ]
+
+        return f"""
+          SELECT ({self.source.region_select})  as "region",
+                 ({self.source.time_select})    as "time",
+                 {", ".join(question_select_chunks)}
+          FROM {self.source.table}
+        """.strip()
+
+    @staticmethod
+    def from_questions(
+        questions: Sequence["Question"],
+        geog: "Geography",
+    ) -> Sequence["QuestionSet"]:
+        """Generate QuestionSets from heterogeneous (source-wise) questions.
+        One set for each source used at `geog`.
+        """
+        source_to_questions = {}
+        for question in questions:
+            question_source = question.get_question_source_for_geog(geog)
+            # start queryset first with source
+            if question_source.source.id not in source_to_questions:
+                source_to_questions[question_source.source.id] = QuestionSet(
+                    source=question_source.source
+                )
+            # add question for QuestionSet with its source at this geog
+            source_to_questions[question_source.source.id].add_question(question)
+        return list(source_to_questions.values())
+
+    def __add__(self, other: "QuestionSet") -> "QuestionSet":
+        if self.source.id != other.source.id:
+            raise ValueError(
+                "Addition of QuestionSets is only available for those with same source."
+            )
+        return QuestionSet(
+            self.source,
+            *self.questions,
+            *other.questions,
+        )
+
+    def __iter__(self) -> Iterator["Question"]:
+        return iter(self.questions)
+
+
+class RegionSet:
+    """Collection of regions of same geographic level."""
+
+    def __init__(
+        self,
+        region: Literal["ALL"] | "Region",
+        *_regions: "Region",
+        geog_level: "Geography" = None,
+    ) -> None:
+        self.geog_level: Geography
+        self.feature_ids: set | Literal["ALL"]
+
+        if region == "ALL":
+            self.feature_ids = "ALL"
+            self.geog_level = geog_level
+            if not geog_level:
+                raise ValueError(
+                    "Special feature_id cases require a geog_level to be specified."
+                )
+        else:
+            self.feature_ids = set()
+            for _region in [region, *_regions]:
+                if not hasattr(self, "geog_level"):
+                    self.geog_level = _region.geog_level
+                elif self.geog_level != _region.geog_level:
+                    raise ValueError(
+                        "Regions in a RegionSet must all be of the same Geography."
+                    )
+                self.feature_ids.add(_region.feature_id)
+
+    def as_list(self) -> list["Region"]:
+        # todo: handle "all"
+        return [Region(self.geog_level, fid) for fid in self.feature_ids]
+
+    @property
+    def sql_list(self) -> str:
+        if self.feature_ids == "ALL":
+            return f"SELECT {self.geog_level.id_field} FROM {self.geog_level.table}"
+        return ", ".join([f"'{fid}'" for fid in self.feature_ids])
+
+    def at_subgeog(self, subgeog: "Geography") -> "RegionSet":
+        """Return a new RegionSet representing regions of smaller geographic level that fit within this region set."""
+
+        subregion_ids: list[str] = []
+        # todo: need feature IDs for all the subgregions within this region set.
+        #   that means making a query to the subgeog table looking for features that fall within the bounds
+        #   of this regionset.
+        if self.feature_ids == "ALL":
+            return RegionSet("ALL", geog_level=subgeog)
+
+        qry = f"""SELECT {subgeog.id_field} FROM {subgeog.table} as sg
+        WHERE sg.
+        """
+
+        return RegionSet(
+            *[Region(subgeog, fid) for fid in subregion_ids],
+            geog_level=subgeog,
+        )
+
+    def __add__(self, other: "RegionSet") -> "RegionSet":
+        if self.geog_level.id != other.geog_level.id:
+            raise ValueError(
+                "Addition of RegionSets is only available for those with same geog_level."
+            )
+        if self.feature_ids == "ALL" and other.feature_ids == "ALL":
+            return RegionSet("ALL", geog_level=self.geog_level)
+
+        return RegionSet(*self.feature_ids, *other.feature_ids)
