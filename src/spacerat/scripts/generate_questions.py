@@ -9,7 +9,7 @@ from slugify import slugify
 from sqlalchemy.orm import Session
 
 from spacerat import SpaceRAT
-from spacerat.model import Source, Question, QuestionSource
+from spacerat.models import Source, Question, QuestionSource
 from spacerat.types import DataType
 
 try:

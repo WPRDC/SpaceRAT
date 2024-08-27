@@ -6,11 +6,12 @@ from typing import Literal, TYPE_CHECKING
 from slugify import slugify
 
 if TYPE_CHECKING:
-    from spacerat.model import Question
+    from spacerat.models import Question
     from spacerat.types import AggregateResultsRow
 
 
-MARTIN_URL = os.environ.get('SPACERAT_MARTIN_URL', 'http://localhost:3000')
+MARTIN_URL = os.environ.get("SPACERAT_MARTIN_URL", "http://localhost:3000")
+
 
 def print_records(records: Iterable["AggregateResultsRow"]) -> None:
     for record in records:
@@ -96,18 +97,12 @@ def get_aggregate_fields(question: "Question") -> str:
 def get_subgeog_clause(
     clause_options: dict,
     clause_id: str = None,
-) -> str:
+) -> str | None:
     # optionally, get extra clause to filter for variant
-    variant_clause = None
     if clause_id is not None and clause_id in clause_options:
-        variant_clause = clause_options[clause_id].where_clause
+        return clause_options[clause_id].where_clause
 
-    if variant_clause:
-        variant_clause = "AND " + variant_clause
-    else:
-        variant_clause = ""
-
-    return variant_clause
+    return None
 
 
 def as_field_name(fid: str) -> str:

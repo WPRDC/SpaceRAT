@@ -5,7 +5,7 @@ from flask import Flask, request, abort
 from flask_sqlalchemy import SQLAlchemy
 from spacerat.core import QuestionParam, RegionParam, SpaceRAT
 from spacerat.helpers import by_region
-from spacerat.model import TimeAxis, Base
+from spacerat.models import TimeAxis, Base
 
 app = Flask(__name__)
 
@@ -25,9 +25,6 @@ def parse_bool(param: str) -> bool:
 
 @app.route("/answer", methods=["GET"])
 def answer():
-    thing = request.args.get("thing")
-    print(type(thing))
-
     # Parse parameters
     question: QuestionParam = parse_param(request.args.get("question", ""))
     region: RegionParam = parse_param(request.args.get("region", ""))
@@ -53,6 +50,7 @@ def answer():
         filter_arg=filter_arg,
         aggregate=aggregate,
         query_records=query_records,
+        geom="geojson",
     )
 
     response = {

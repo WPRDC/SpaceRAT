@@ -188,10 +188,10 @@ class QuestionSource(db.Model, Serializable):
 
     # related models
     question: Mapped["Question"] = relationship(
-        back_populates="sources", lazy="immediate", join_depth=2
+        back_populates="sources", lazy="joined", join_depth=3
     )
     source: Mapped["Source"] = relationship(
-        back_populates="questions", lazy="immediate", join_depth=2
+        back_populates="questions", lazy="joined", join_depth=3
     )
 
     # associated data
@@ -817,8 +817,3 @@ class RegionSet:
             return RegionSet("ALL", geog_level=self.geog_level)
 
         return RegionSet(*self.feature_ids, *other.feature_ids)
-
-
-# todo:
-#   - pre-link parent geogs to subgeogs (e.g. add `county`, `neighborhood`, etc fields on parcel index table
-#   - add indexes for each of those columns

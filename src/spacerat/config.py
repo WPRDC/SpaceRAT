@@ -7,7 +7,7 @@ import yaml
 from sqlalchemy import select, Engine
 from sqlalchemy.orm import Session
 
-from spacerat.model import (
+from spacerat.models import (
     Base,
     Source,
     Question,

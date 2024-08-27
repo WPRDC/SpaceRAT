@@ -318,3 +318,11 @@ print_records(
 #   - fair_market_assessed_value__n: 1547
 # ...
 ```
+
+
+## Setup db
+```postgresql
+grant usage on schema spacerat to datastore;
+
+grant select on all tables in schema spacerat to datastore;
+```

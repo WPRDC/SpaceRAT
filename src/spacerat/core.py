@@ -4,7 +4,7 @@ import os
 import re
 from os import PathLike
 from pathlib import Path
-from typing import TypeVar, Type, Sequence, Mapping, Any, Iterable
+from typing import TypeVar, Type, Sequence, Mapping, Any, Iterable, Literal
 from urllib.parse import urlparse
 
 import psycopg2
@@ -14,9 +14,10 @@ from slugify import slugify
 from sqlalchemy import Engine, create_engine, select, ColumnExpressionArgument
 from sqlalchemy.orm import Session
 
+
 from spacerat.config import init_db
 from spacerat.helpers import get_subgeog_clause
-from spacerat.model import (
+from spacerat.models import (
     Question,
     TimeAxis,
     Region,
@@ -35,6 +36,8 @@ T = TypeVar("T")
 QuestionParam = str | Question | Sequence[str] | Sequence[Question] | QuestionSet
 
 RegionParam = str | Region | Sequence[Region] | Sequence[str] | RegionSet | Geography
+
+GeomOption = Literal["raw"] | Literal["geojson"] | None
 
 SPACERAT_DB_URL = os.environ.get("SPACERAT_DB_URL", "sqlite://")
 SPACERAT_DATASTORE_READ_URL = os.environ.get("SPACERAT_DATASTORE_URL")
@@ -262,7 +265,7 @@ class SpaceRAT:
                     variant=map_variant.variant,
                     included_questions=base_questions + variant_questions,
                     replace=replace,
-                    view_name=name
+                    view_name=name,
                 )
 
     def create_map_table(
@@ -307,7 +310,7 @@ class SpaceRAT:
             variant=variant,
             filter=filter,
             filter_arg=filter_arg,
-            include_geom=True,
+            geom="raw",
         )
 
         # todo: create indexes on map tables
@@ -345,7 +348,7 @@ class SpaceRAT:
         variant: str = None,
         filter: str = None,
         filter_arg: str = None,
-        include_geom: bool = False,
+        geom: GeomOption = None,
     ) -> tuple[str, str]:
         """
         Dry run of `answer_question`.
@@ -370,7 +373,7 @@ class SpaceRAT:
             variant=variant,
             filter=filter,
             filter_arg=filter_arg,
-            include_geom=include_geom,
+            geom=geom,
         )
 
     def answer_question(
@@ -383,6 +386,7 @@ class SpaceRAT:
         filter_arg: str = None,
         aggregate: bool = True,
         query_records: bool = False,
+        geom: GeomOption = None,
         # add option that allows the set of regions provided to be spatially unioned and treated as one big single geog (e.g. hill district)
     ) -> tuple[list[AggregateResultsRow], list]:
         """
@@ -435,6 +439,7 @@ class SpaceRAT:
             filter_arg=filter_arg,
             aggregate=aggregate,
             query_records=query_records,
+            geom=geom,
         )
 
     def _get_query(
@@ -445,7 +450,7 @@ class SpaceRAT:
         variant: str = None,
         filter: str = None,
         filter_arg: str = None,
-        include_geom: bool = False,
+        geom: GeomOption = None,
     ) -> (str, str):
         """
 
@@ -463,11 +468,6 @@ class SpaceRAT:
         # find subgeog that works for this question, could be region if it directly answers it
         geog: Geography = regions.geog_level
         subgeog: Geography = regions.geog_level.get_subgeography_for_question(questions)
-
-        # generate  query that results in region, parent table and is limited to the source's spatial domain
-        variant_clause = get_subgeog_clause(subgeog.variants, variant)
-        filter_clause = get_subgeog_clause(subgeog.filters, filter)
-        spatial_domain = self.get_sql_spatial_domain(source)
 
         geog_field = slugify(geog.id, separator="_")
         subgeog_field = slugify(subgeog.id, separator="_")
@@ -502,12 +502,6 @@ class SpaceRAT:
         # with a granularity specified in the questions `temporal resolution`
         group_by = "time, region_id"
         time_selection = f'"{TIME_FIELD}"'
-        time_filter = (
-            f""" "{TIME_FIELD}" {time_axis.domain_filter} """
-            if time_axis.domain_filter
-            else ""
-        )
-
         # handle aggregation across time
         if not spatial_agg and temporal_resolution != time_axis.resolution:
             group_by += ", parent_region"
@@ -515,6 +509,29 @@ class SpaceRAT:
                 f'MIN("{TIME_FIELD}") as start_time, MAX("{TIME_FIELD}") as end_time'
             )
 
+        # handle filtering data
+        time_filter_clause = (
+            f""" "{TIME_FIELD}" {time_axis.domain_filter} """
+            if time_axis.domain_filter
+            else ""
+        )
+        variant_clause = get_subgeog_clause(subgeog.variants, variant)
+        filter_clause = get_subgeog_clause(subgeog.filters, filter)
+
+        # todo: add more sql that filters regions by spatial domain - may require another table
+        # spatial_domain_clause
+
+        filters = " AND ".join(
+            clause
+            for clause in [time_filter_clause, variant_clause, filter_clause]
+            if clause
+        )
+        has_filters = bool(variant_clause or filter_clause or time_filter_clause)
+
+        inner_where_clause = f"WHERE {filters} " if has_filters else ""
+
+        # todo: replace all with SQLAlchemy once we know what we're doin'
+        # generate  query that results in region, parent table and is limited to the source's spatial domain
         inside_query = f"""
                 SELECT date_trunc('{temporal_resolution}', "time") as "{TIME_FIELD}",  
                                {", ".join([q.field_name for q in questions])}, 
@@ -522,14 +539,23 @@ class SpaceRAT:
                                regions."{geog_field}"          as "region_id"
                                
                 FROM ({source_query}) as data 
-                  JOIN "{self.schema}"."{geo_mapping_table}" as regions
-                       ON data.region = regions."{subgeog_field}"                
-                {time_filter}
+                  JOIN "{self.schema}"."{geo_mapping_table}" as regions ON data.region = regions."{subgeog_field}"
+                  JOIN "{self.schema}"."{subgeog.table}" as subgeogs ON regions."{subgeog_field}" = subgeogs."{subgeog.id_field}"
+                {inner_where_clause} 
             """.strip()
 
-        # todo: replace all with SQLAlchemy once we know what we're doin'
+        geo_select = ""
+        if geom == "raw":
+            geo_select = ", geo.geom, geo.centroid"
+        if geom == "geojson":
+            geo_select = ", ST_AsGeoJSON(geo.geom) as geom, ST_AsGeoJSON(geo.centroid) as centroid"
+
+        geo_join = ""
+        if geom:
+            geo_join = f'JOIN "{self.schema}"."{geog.table}" geo ON geo."{geog.id_field}" = data.region_id'
+
         query = f"""
-        SELECT data.*, geo.geom, geo.centroid
+        SELECT data.* {geo_select}
         FROM (SELECT 
                 {time_selection},
                 {', '.join(agg_select_chunks)}, 
@@ -537,8 +563,7 @@ class SpaceRAT:
                 region_id
               FROM ({inside_query}) time_filtered 
               GROUP BY {group_by}) data
-          JOIN "{self.schema}"."{geog.table}" geo
-            ON geo."{geog.id_field}" = data.region_id
+          {geo_join}
         """
 
         # generate queries with params
@@ -559,6 +584,7 @@ class SpaceRAT:
         filter_arg: str = None,
         aggregate: bool = True,
         query_records: bool = False,
+        geom: GeomOption = None,
     ) -> tuple[list[AggregateResultsRow], list]:
         """Finds result for questions across multiple regions across points across time axis."""
 
@@ -569,6 +595,7 @@ class SpaceRAT:
             variant=variant,
             filter=filter,
             filter_arg=filter_arg,
+            geom=geom,
         )
 
         # query and return requested data
