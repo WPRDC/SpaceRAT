@@ -8,5 +8,6 @@ query: >
   SELECT LOWER(hood)        as id,
          hood               as name,
          _geom              as geom,
-         st_centroid(_geom) as centroid
+         st_setsrid(st_setsrid(st_centroid(_geom), 4326), 4326) as centroid
   FROM "4af8e160-57e9-4ebf-a501-76ca1b42fc99";
+  

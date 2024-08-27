@@ -1,0 +1,8 @@
+id: alt-id
+name: Alternate Parcel Identification Number
+datatype: discrete
+sources:
+- geog: parcel
+  source_id: property-assessments
+  value_select: |-
+    "ALT_ID"

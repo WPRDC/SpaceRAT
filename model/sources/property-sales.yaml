@@ -1,0 +1,13 @@
+id: property-sales
+name: Property Sales
+table: property_sale_transactions
+
+spatial_resolution: parcel
+spatial_domain: county.42003
+
+temporal_resolution: month
+temporal_domain_name: current
+
+region_select: >
+  "PARID"
+time_select: CURRENT_DATE::timestamp

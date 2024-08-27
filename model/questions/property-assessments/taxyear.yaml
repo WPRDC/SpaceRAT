@@ -1,0 +1,8 @@
+id: taxyear
+name: The current certified tax year
+datatype: continuous
+sources:
+- geog: parcel
+  source_id: property-assessments
+  value_select: |-
+    "TAXYEAR"

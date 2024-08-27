@@ -3,3 +3,6 @@ psycopg2
 python-slugify
 sqlalchemy
 ckanapi
+Flask
+python-slugify
+click

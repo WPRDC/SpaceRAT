@@ -9,8 +9,9 @@ subgeographies:
   - parcel
 query: >
   SELECT "GEOID"            as id,
+         "NAME"             as name,
          _geom              as geom,
-         st_centroid(_geom) as centroid
+         st_setsrid(st_centroid(_geom), 4326) as centroid
   FROM "df0e4678-66d0-42f7-9e6d-b3822418887e"
   WHERE "STATEFP" = '42';
 

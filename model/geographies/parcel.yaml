@@ -5,6 +5,7 @@ table: parcel_index
 subgeographies: # leaf, besides points
 query: >
   SELECT sub.parcel_id,
+         sub.address                                  AS "name",
          sub.block_lot,
          sub.class,
          sub.housenum,
@@ -15,27 +16,44 @@ query: >
          sub.state,
          sub.zip,
          sub.address,
+         sub.owner_address,
          sub.owner_occupied,
          sub.geom,
          sub.centroid,
-         (sub.parcel_id || ' '::text) || sub.address AS _full_text
-  FROM (SELECT assessment."PARID"            AS parcel_id,
-               boundary."MAPBLOCKLO"         AS block_lot,
-               assessment."CLASSDESC"        AS class,
-               assessment."PROPERTYHOUSENUM" AS housenum,
-               assessment."PROPERTYFRACTION" AS fraction,
-               assessment."PROPERTYUNIT"     AS unit,
-               assessment."PROPERTYADDRESS"  AS street,
-               assessment."PROPERTYCITY"     AS city,
-               assessment."PROPERTYSTATE"    AS state,
-               assessment."PROPERTYZIP"      AS zip,
-               (((((((assessment."PROPERTYHOUSENUM" || ' '::text) || assessment."PROPERTYADDRESS") || ' '::text) ||
-                   assessment."PROPERTYCITY") || ' '::text) || assessment."PROPERTYSTATE") || ' '::text) ||
-               assessment."PROPERTYZIP"      AS address,
+         (sub.parcel_id || ' '::text) || sub.address  AS _full_text
+  FROM (SELECT assessment."PARID"                                  AS parcel_id,
+               boundary."MAPBLOCKLO"                               AS block_lot,
+               assessment."CLASSDESC"                              AS class,
+               assessment."PROPERTYHOUSENUM"                       AS housenum,
+               assessment."PROPERTYFRACTION"                       AS fraction,
+               assessment."PROPERTYUNIT"                           AS unit,
+               assessment."PROPERTYADDRESS"                        AS street,
+               assessment."PROPERTYCITY"                           AS city,
+               assessment."PROPERTYSTATE"                          AS state,
+               assessment."PROPERTYZIP"                            AS zip,
+
+               trim(regexp_replace(
+                       assessment."CHANGENOTICEADDRESS1" ||
+                       assessment."CHANGENOTICEADDRESS2" ||
+                       assessment."CHANGENOTICEADDRESS3" ||
+                       assessment."CHANGENOTICEADDRESS4",
+                       '\s+', ' ', 'g')
+               )                                                   as owner_address,
+
+               trim(regexp_replace(
+                       assessment."PROPERTYHOUSENUM" || ' ' ||
+                       assessment."PROPERTYADDRESS" || ' ' ||
+                       assessment."PROPERTYCITY" || ' ' ||
+                       assessment."PROPERTYSTATE" || ' ' ||
+                       assessment."PROPERTYZIP",
+                       '\s+', ' ', 'g')
+               )                                                   AS address,
+
                (assessment."HOMESTEADFLAG" IS NOT NULL
-                OR assessment."CHANGENOTICEADDRESS1" ILIKE assessment."PROPERTYHOUSENUM" || '%') AS owner_occupied,
-               boundary._geom                AS geom,
-               st_centroid(boundary._geom)   AS centroid
+                   OR assessment."CHANGENOTICEADDRESS1" ILIKE assessment."PROPERTYHOUSENUM" ||
+                                                              '%') AS owner_occupied,
+               boundary._geom                                      AS geom,
+               st_setsrid(st_centroid(boundary._geom), 4326)                         AS centroid
         FROM "65855e14-549e-4992-b5be-d629afc676fa" assessment
                  JOIN "3f50d47a-ab54-4da2-9f03-8519006e9fc9" boundary
                       ON assessment."PARID" = boundary."PIN") sub;
@@ -43,8 +61,17 @@ variants:
   residential: >
     "class" LIKE 'RESIDENTIAL'
   commercial: >
-    "class" LIKE 'RESIDENTIAL'
+    "class" LIKE 'COMMERCIAL'
   industrial: >
     "class" LIKE 'INDUSTRIAL'
   owner_occupied: >
     "owner_occupied"
+filters:
+  by_owner: >
+    "owner_address" ILIKE %s
+trigram_indexes:
+  - _full_text
+  - address
+  - owner_address
+  - lower(address)
+  - lower(owner_address)

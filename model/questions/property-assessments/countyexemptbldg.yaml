@@ -1,0 +1,8 @@
+id: countyexemptbldg
+name: County Exempt Building Amount
+datatype: continuous
+sources:
+- geog: parcel
+  source_id: property-assessments
+  value_select: |-
+    "COUNTYEXEMPTBLDG"

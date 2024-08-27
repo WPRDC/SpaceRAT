@@ -1,0 +1,13 @@
+id: pli-permits
+name: PLI Building Permits
+table: pli_permits
+
+spatial_resolution: parcel
+spatial_domain: county-subdivision.4200361000 # city of pittsburgh
+
+temporal_resolution: month
+temporal_domain_name: current
+
+region_select: >
+  "parcel_num"
+time_select: CURRENT_DATE::timestamp

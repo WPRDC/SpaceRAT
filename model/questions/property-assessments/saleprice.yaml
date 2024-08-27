@@ -1,0 +1,8 @@
+id: saleprice
+name: Sale Price
+datatype: continuous
+sources:
+- geog: parcel
+  source_id: property-assessments
+  value_select: |-
+    "SALEPRICE"

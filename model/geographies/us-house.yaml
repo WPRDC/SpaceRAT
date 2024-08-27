@@ -8,6 +8,6 @@ query: >
       "GEOID" as id,
       "NAMELSAD" as name,
       _geom as geom,
-      st_centroid(_geom) as centroid
+      st_setsrid(st_centroid(_geom), 4326) as centroid
   FROM "411a3cae-4545-4497-9663-aa7fa76d8f12"
   WHERE "STATEFP" = '42';

@@ -1,0 +1,8 @@
+id: condition
+name: Dwelling - Condition
+datatype: discrete
+sources:
+- geog: parcel
+  source_id: property-assessments
+  value_select: |-
+    "CONDITION"

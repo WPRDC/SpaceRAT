@@ -1,0 +1,8 @@
+id: fullbaths
+name: Dwelling - Full Baths
+datatype: continuous
+sources:
+- geog: parcel
+  source_id: property-assessments
+  value_select: |-
+    "FULLBATHS"

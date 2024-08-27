@@ -2,9 +2,15 @@
 
 .DS_Store
 
-.venv
-
+.venv/
+.env/
+env/
 __pycache__/
 
-.env
 *.db
+
+.env*
+!.env.example
+
+
+spacerat.egg-info/

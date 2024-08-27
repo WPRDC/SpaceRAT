@@ -1,0 +1,8 @@
+id: ownercode
+name: Owner Type Code 1
+datatype: discrete
+sources:
+- geog: parcel
+  source_id: property-assessments
+  value_select: |-
+    "OWNERCODE"

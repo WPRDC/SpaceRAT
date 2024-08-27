@@ -1,0 +1,8 @@
+id: exteriorfinish
+name: Dwelling - Exterior Wall code
+datatype: discrete
+sources:
+- geog: parcel
+  source_id: property-assessments
+  value_select: |-
+    "EXTERIORFINISH"

@@ -1,0 +1,8 @@
+id: fairmarkettotal
+name: Fair Market Total Value
+datatype: continuous
+sources:
+- geog: parcel
+  source_id: property-assessments
+  value_select: |-
+    "FAIRMARKETTOTAL"

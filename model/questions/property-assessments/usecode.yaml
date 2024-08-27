@@ -1,0 +1,8 @@
+id: usecode
+name: Land Use Code
+datatype: discrete
+sources:
+- geog: parcel
+  source_id: property-assessments
+  value_select: |-
+    "USECODE"

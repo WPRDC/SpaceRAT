@@ -1,0 +1,8 @@
+id: changenoticeaddress1
+name: Change Notice Full Address 1
+datatype: discrete
+sources:
+- geog: parcel
+  source_id: property-assessments
+  value_select: |-
+    "CHANGENOTICEADDRESS1"

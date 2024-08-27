@@ -1,0 +1,34 @@
+id: property-assessments
+name: Property Assessments
+description: TBD
+source: property-assessments
+geographies:
+  - neighborhood
+  - county-subdivision
+  - county
+questions:
+  - lotarea
+  - saledate
+  - countybuilding
+  - countyland
+  - countytotal
+  - localbuilding
+  - localland
+  - localtotal
+  - fairmarketbuilding
+  - fairmarketland
+  - fairmarkettotal
+  - countyexemptbldg
+variants:
+  owner_occupied:
+    questions:
+      - fullbaths
+      - halfbaths
+      - finishedlivingarea
+  residential:
+    questions:
+      - fullbaths
+      - halfbaths
+      - finishedlivingarea
+  commercial:
+  industrial:

@@ -9,5 +9,5 @@ query: >
       "GEOID" as id,
       "NAMELSAD" as name,
       _geom as geom,
-      st_centroid(_geom) as centroid
+      st_setsrid(st_centroid(_geom), 4326) as centroid
   FROM "21b7b0ec-fef6-4bc7-8120-8926554d2578";

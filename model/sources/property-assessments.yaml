@@ -3,7 +3,8 @@ name: Property Assessments
 table: property_assessments
 
 spatial_resolution: parcel
-spatial_domain: county.42003
+spatial_domain:
+  - county.42003
 
 temporal_resolution: month
 temporal_domain_name: current

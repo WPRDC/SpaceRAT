@@ -7,5 +7,5 @@ query: >
   SELECT "GEOID"            as id,
          "NAME"             as name,
          _geom              as geom,
-         st_centroid(_geom) as centroid
+         st_setsrid(st_centroid(_geom), 4326) as centroid
   FROM "f368d536-69cb-4e3c-9cd5-6f3a03db1133";

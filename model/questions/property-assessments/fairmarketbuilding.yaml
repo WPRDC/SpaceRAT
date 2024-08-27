@@ -1,0 +1,8 @@
+id: fairmarketbuilding
+name: Fair Market Building Value
+datatype: continuous
+sources:
+- geog: parcel
+  source_id: property-assessments
+  value_select: |-
+    "FAIRMARKETBUILDING"

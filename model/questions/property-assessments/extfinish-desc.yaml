@@ -1,0 +1,8 @@
+id: extfinish-desc
+name: Dwelling - Exterior Wall Description
+datatype: discrete
+sources:
+- geog: parcel
+  source_id: property-assessments
+  value_select: |-
+    "EXTFINISH_DESC"

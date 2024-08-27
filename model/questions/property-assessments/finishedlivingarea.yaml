@@ -1,0 +1,8 @@
+id: finishedlivingarea
+name: Finished living area, as measured from the outside of the structure.
+datatype: continuous
+sources:
+- geog: parcel
+  source_id: property-assessments
+  value_select: |-
+    "FINISHEDLIVINGAREA"
