@@ -464,7 +464,7 @@ class MapConfigVariant(db.Model, Serializable):
 
     def as_dict(self):
         return {
-            "questions": [q.id for q in self.questions],
+            "questions": [{"id": q.id, "name": q.name} for q in self.questions],
         }
 
 
@@ -511,11 +511,14 @@ class MapConfig(db.Model, Serializable):
             "id": self.id,
             "name": self.name,
             "description": self.description,
-            "source": self.source.id,
-            "geographies": [g.id for g in self.geographies],
-            "questions": [q.id for q in self.questions],
-            "variants": {mv.variant: mv.as_dict() for mv in self.variants},
-            "tile_urls": self.tile_jsons,
+            "source": self.source.as_dict(),
+            "geographies": [{"id": g.id, "name": g.name} for g in self.geographies],
+            "questions": [{"id": q.id, "name": q.name} for q in self.questions],
+            "tilejsons": self.tile_jsons(),
+            "variants": {
+                mv.variant: {"tilejsons": self.tile_jsons(mv.variant), **mv.as_dict()}
+                for mv in self.variants
+            },
         }
 
     def get_view_name(self, geog_id: str, variant: str | None = None) -> str:
@@ -524,17 +527,11 @@ class MapConfig(db.Model, Serializable):
         variant = slugify(variant, separator="_") if variant else ""
         return f"map__{source}__{geog}__{variant}".rstrip("_")
 
-    @property
-    def tile_jsons(self) -> dict:
+    def tile_jsons(self, variant: str = None) -> dict:
         results: dict = {}
         for geog in self.geographies:
-            view_name = self.get_view_name(geog.id)
-            results[geog.id] = {"tiles": tileserver_url(view_name), "variants": []}
-
-            for variant in self.variants:
-                view_name = self.get_view_name(geog.id, variant.variant)
-                results[geog.id]["variants"].append(tileserver_url(view_name))
-
+            view_name = self.get_view_name(geog.id, variant)
+            results[geog.id] = tileserver_url(view_name)
         return results
 
 

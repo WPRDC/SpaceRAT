@@ -38,6 +38,8 @@ def answer():
     aggregate: bool = parse_bool(request.args.get("aggregate", "true"))
     query_records: bool = parse_bool(request.args.get("queryRecords", "false"))
 
+    geom: bool = parse_bool(request.args.get("geom", "false"))
+
     # Instantiate spacerat
     rat = SpaceRAT()
 
@@ -50,7 +52,7 @@ def answer():
         filter_arg=filter_arg,
         aggregate=aggregate,
         query_records=query_records,
-        geom="geojson",
+        geom="geojson" if geom else None,
     )
 
     response = {
@@ -70,7 +72,7 @@ def _show_model(model_type: str, model_id: str):
         obj = getter(model_id)
         if obj:
             return {
-                "results": obj.as_dict(),
+                "results": [obj.as_dict()],
             }
         else:
             abort(404, f"{model_type.capitalize()} not found")
