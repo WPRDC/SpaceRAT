@@ -773,7 +773,6 @@ class RegionSet:
         # todo: handle "all"
         return [Region(self.geog_level, fid) for fid in self.feature_ids]
 
-    #             f"SELECT geom FROM {self.geog_level.table} WHERE id = '{self.feature_id}'"
     @property
     def extent_query(self) -> str:
         """Returns a SQL query that results in the unified 2d footprint of this region set."""

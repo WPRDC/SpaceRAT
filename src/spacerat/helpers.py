@@ -114,4 +114,4 @@ def tbl_name(field: str) -> str:
 
 
 def tileserver_url(map_table: str) -> str:
-    return f'{MARTIN_URL.rstrip("/")}/{map_table}.json'
+    return f'{MARTIN_URL.rstrip("/")}/table.{map_table}.geom'
