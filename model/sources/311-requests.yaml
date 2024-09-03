@@ -1,0 +1,13 @@
+id: 311-requests
+name: 311 Requests
+table: 311-requests
+
+spatial_resolution: point
+spatial_domain: county-subdivision.4200361000 # city of pittsburgh
+
+temporal_resolution: month
+temporal_domain_name: current
+
+region_select: >
+  "parcel_num"
+time_select: CURRENT_DATE::timestamp

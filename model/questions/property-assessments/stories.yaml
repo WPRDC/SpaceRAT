@@ -1,8 +1,4 @@
 id: stories
 name: Dwelling - Number of Stories
 datatype: discrete
-sources:
-- geog: parcel
-  source_id: property-assessments
-  value_select: |-
-    "STORIES"
+source: property-assessments

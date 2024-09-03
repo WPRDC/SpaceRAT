@@ -1,8 +1,4 @@
 id: yearblt
 name: Dwelling - Year Built
 datatype: continuous
-sources:
-- geog: parcel
-  source_id: property-assessments
-  value_select: |-
-    "YEARBLT"
+source: property-assessments

@@ -1,8 +1,4 @@
 id: roof
 name: Dwelling - Roof
 datatype: discrete
-sources:
-- geog: parcel
-  source_id: property-assessments
-  value_select: |-
-    "ROOF"
+source: property-assessments

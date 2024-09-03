@@ -1,8 +1,4 @@
 id: propertyhousenum
 name: Property Location House Number
 datatype: discrete
-sources:
-- geog: parcel
-  source_id: property-assessments
-  value_select: |-
-    "PROPERTYHOUSENUM"
+source: property-assessments

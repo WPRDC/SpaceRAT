@@ -1,8 +1,4 @@
 id: propertyzip
 name: Property Location Zip code, first 5 digits
 datatype: discrete
-sources:
-- geog: parcel
-  source_id: property-assessments
-  value_select: |-
-    "PROPERTYZIP"
+source: property-assessments

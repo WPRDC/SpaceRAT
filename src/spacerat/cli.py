@@ -204,7 +204,7 @@ def dump_model(ctx: click.Context, dst: PathLike):
     for question in rat.get_questions():
         out_dir = None
         if dst:
-            out_dir = dst / "questions" / question.sources[0].source_id
+            out_dir = dst / "questions" / question.source.id
             out_dir.mkdir(parents=True, exist_ok=True)
 
         write_or_print(
@@ -338,8 +338,15 @@ def populate_maps(
 
 
 @cli.command()
+@click.option(
+    "--skip-maps",
+    is_flag=True,
+    show_default=True,
+    default=False,
+    help="Skip loading maps.",
+)
 @click.pass_context
-def init(ctx: click.Context):
+def init(ctx: click.Context, skip_maps: bool):
     """
     Initialize a SpaceRAT configration.
 
@@ -350,5 +357,6 @@ def init(ctx: click.Context):
        indices)
     """
     rat: SpaceRAT = ctx.obj["rat"]
+    rat.reinit(skip_maps=skip_maps)
 
     click.echo(_bold("Done!", fg="green"))

@@ -1,8 +1,4 @@
 id: halfbaths
 name: Dwelling - Half Baths
 datatype: continuous
-sources:
-- geog: parcel
-  source_id: property-assessments
-  value_select: |-
-    "HALFBATHS"
+source: property-assessments

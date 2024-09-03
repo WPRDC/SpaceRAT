@@ -1,8 +1,4 @@
 id: cardnumber
 name: Dwelling - Building (card) Number
 datatype: continuous
-sources:
-- geog: parcel
-  source_id: property-assessments
-  value_select: |-
-    "CARDNUMBER"
+source: property-assessments

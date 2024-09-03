@@ -1,8 +1,4 @@
 id: fireplaces
 name: Dwelling - Number of Wood burning Fireplaces Stacks
 datatype: continuous
-sources:
-- geog: parcel
-  source_id: property-assessments
-  value_select: |-
-    "FIREPLACES"
+source: property-assessments

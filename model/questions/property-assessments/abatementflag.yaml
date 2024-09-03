@@ -1,8 +1,4 @@
 id: abatementflag
 name: Abatement Flag
 datatype: discrete
-sources:
-- geog: parcel
-  source_id: property-assessments
-  value_select: |-
-    "ABATEMENTFLAG"
+source: property-assessments

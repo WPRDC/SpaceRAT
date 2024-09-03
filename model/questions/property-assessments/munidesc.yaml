@@ -1,8 +1,4 @@
 id: munidesc
 name: Municipality Name
 datatype: discrete
-sources:
-- geog: parcel
-  source_id: property-assessments
-  value_select: |-
-    "MUNIDESC"
+source: property-assessments

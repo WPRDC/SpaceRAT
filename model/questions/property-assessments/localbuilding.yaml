@@ -1,8 +1,4 @@
 id: localbuilding
 name: Local Assessed Value for Building
 datatype: continuous
-sources:
-- geog: parcel
-  source_id: property-assessments
-  value_select: |-
-    "LOCALBUILDING"
+source: property-assessments

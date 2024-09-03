@@ -1,8 +1,4 @@
 id: countyland
 name: County Assessed Value for Land
 datatype: continuous
-sources:
-- geog: parcel
-  source_id: property-assessments
-  value_select: |-
-    "COUNTYLAND"
+source: property-assessments

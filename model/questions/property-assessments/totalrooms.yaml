@@ -1,8 +1,4 @@
 id: totalrooms
 name: Dwelling - Total Rooms
 datatype: continuous
-sources:
-- geog: parcel
-  source_id: property-assessments
-  value_select: |-
-    "TOTALROOMS"
+source: property-assessments

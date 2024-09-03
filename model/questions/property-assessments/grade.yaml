@@ -1,8 +1,4 @@
 id: grade
 name: Dwelling - Grade
 datatype: discrete
-sources:
-- geog: parcel
-  source_id: property-assessments
-  value_select: |-
-    "GRADE"
+source: property-assessments

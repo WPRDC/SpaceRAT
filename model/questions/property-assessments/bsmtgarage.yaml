@@ -1,8 +1,4 @@
 id: bsmtgarage
 name: Dwelling - Integral Basement Garage (Number of Cars)
 datatype: discrete
-sources:
-- geog: parcel
-  source_id: property-assessments
-  value_select: |-
-    "BSMTGARAGE"
+source: property-assessments

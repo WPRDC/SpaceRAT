@@ -1,6 +1,8 @@
-# 🚀🐀 SpaceRAT
+# SpaceRAT :rocket::rat:
 
 **Spatial**-**R**elational **A**ggregation **T**oolkit
+
+[:film_projector: Slides](https://docs.google.com/presentation/d/1nEgKGXUKslwrJjFZ8QSzA8jb3-fDC2qcZVVXeJA3lQw/edit?usp=sharing)
 
 Series of tools to operationalize a semantic mapping from a developer-centered civic-data ontology to its representation
 in a database.

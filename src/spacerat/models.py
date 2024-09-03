@@ -1,9 +1,8 @@
 import datetime
 from dataclasses import dataclass
-from typing import Optional, Union, Sequence, Literal, Iterator
+from typing import Optional, Union, Literal, Iterator
 
 import yaml
-from flask_sqlalchemy import SQLAlchemy
 from slugify import slugify
 from sqlalchemy import (
     String,
@@ -57,19 +56,18 @@ class Base(DeclarativeBase):
         raise NotImplementedError
 
 
-db = SQLAlchemy(model_class=Base)
-
-
 class Serializable:
-    id: str
-    name: str
+    id: Mapped[str] = mapped_column(String(120), primary_key=True)
+    name: Mapped[str] = mapped_column(String(100))
 
-    def as_dict(self) -> dict:
+    def as_dict(self, expand: bool = True) -> dict:
         raise NotImplementedError
 
     def as_yaml(self) -> str:
         yaml.add_representer(_sql, sql_presenter)
-        return yaml.dump(self.as_dict(), default_flow_style=False, sort_keys=False)
+        return yaml.dump(
+            self.as_dict(expand=False), default_flow_style=False, sort_keys=False
+        )
 
     def as_brief(self) -> dict:
         return {
@@ -78,7 +76,7 @@ class Serializable:
         }
 
 
-class Question(db.Model, Serializable):
+class Question(Serializable, Base):
     """
     Represents a question mapping user ontology to source data.
 
@@ -87,15 +85,13 @@ class Question(db.Model, Serializable):
 
     __tablename__ = "question"
 
-    id: Mapped[str] = mapped_column(String(120), primary_key=True)
-    name: Mapped[str] = mapped_column(String(100))
-    datatype: Mapped[DataType] = mapped_column(String(20))
-    sources: Mapped[list["QuestionSource"]] = relationship(
-        back_populates="question",
-        cascade="all, delete-orphan",
-        lazy="immediate",
-        join_depth=3,
+    source_id: Mapped[str] = mapped_column(ForeignKey("source.id"))
+    source: Mapped["Source"] = relationship(
+        back_populates="questions", lazy="selectin", join_depth=3
     )
+
+    datatype: Mapped[DataType] = mapped_column(String(20))
+    value_select: Mapped[str] = mapped_column(Text())
 
     def __repr__(self):
         return (
@@ -119,9 +115,17 @@ class Question(db.Model, Serializable):
         return get_aggregate_fields(self)
 
     @property
-    def spatial_resolutions(self) -> list[str]:
+    def spatial_resolution(self) -> str:
         """The geographic levels this question directly describes"""
-        return [qs.source.spatial_resolution for qs in self.sources]
+        return self.source.spatial_resolution
+
+    @property
+    def value_clause(self) -> str:
+        return f"""{self.value_select} as "{self.field_name}" """
+
+    @property
+    def raw_field(self):
+        return self.value_select
 
     def directly_describes(self, geog: Union["Geography", str]) -> bool:
         """Returns True if this question can be answered for the geog_type without aggregation."""
@@ -130,31 +134,16 @@ class Question(db.Model, Serializable):
         else:
             geog_id = geog.id
 
-        for qs in self.sources:
-            if geog_id == qs.source.spatial_resolution:
-                return True
-        return False
-
-    def get_question_source_for_geog(
-        self, geog: "Geography"
-    ) -> Optional["QuestionSource"]:
-        """Returns QuestionSource at `geog` level if it exists."""
-        for qsource in self.sources:
-            if qsource.source.spatial_resolution == geog.id:
-                return qsource
-        return None
+        return geog_id == self.source.spatial_resolution
 
     def get_source_and_subgeog(
         self, geog: "Geography"
     ) -> Tuple[Optional["Source"], Optional["Geography"]]:
         subgeog = geog.get_subgeography_for_question(self)
-        qsource = self.get_question_source_for_geog(subgeog)
-        return qsource.source, subgeog
+        return self.source, subgeog
 
     def get_temporal_resolution(self, geog: "Geography") -> TemporalResolution:
-        qs = self.get_question_source_for_geog(geog)
-        if qs:
-            return qs.source.temporal_resolution
+        return self.source.temporal_resolution
 
     @staticmethod
     def from_config(**kwargs):
@@ -166,65 +155,21 @@ class Question(db.Model, Serializable):
             spatial_domain_str = ",".join(spatial_domain)
         return Source(**kwargs, spatial_domain_str=spatial_domain_str)
 
-    def as_dict(self):
+    def as_dict(self, expand: bool = True) -> dict:
         result = {
             "id": self.id,
             "name": self.name,
             "datatype": self.datatype,
-            "sources": [src.as_dict() for src in self.sources],
+            "source": self.source.as_dict() if expand else self.source.id,
         }
         return result
 
 
-class QuestionSource(db.Model, Serializable):
-    __tablename__ = "question_source"
-    question_id: Mapped[str] = mapped_column(
-        ForeignKey("question.id"), primary_key=True
-    )
-    source_id: Mapped[str] = mapped_column(ForeignKey("source.id"), primary_key=True)
-    geography_id: Mapped[str] = mapped_column(
-        ForeignKey("geography.id"), primary_key=True
-    )
-
-    # related models
-    question: Mapped["Question"] = relationship(
-        back_populates="sources", lazy="joined", join_depth=3
-    )
-    source: Mapped["Source"] = relationship(
-        back_populates="questions", lazy="joined", join_depth=3
-    )
-
-    # associated data
-    value_select: Mapped[str] = mapped_column(Text())
-    geography: Mapped["Geography"] = relationship()
-
-    @property
-    def value_clause(self) -> str:
-        return f"""{self.value_select} as "{self.field_name}" """
-
-    @property
-    def field_name(self) -> str:
-        return as_field_name(self.question.id)
-
-    @property
-    def raw_field(self):
-        return self.value_select
-
-    def as_dict(self):
-        return {
-            "geog": self.geography_id,
-            "source_id": self.source_id,
-            "value_select": _sql(self.value_select),
-        }
-
-
-class Source(db.Model, Serializable):
+class Source(Serializable, Base):
     """Defines how to pull data at a geographic level"""
 
     __tablename__ = "source"
 
-    id: Mapped[str] = mapped_column(String(120), primary_key=True)
-    name: Mapped[str] = mapped_column(String(100))
     table: Mapped[str] = mapped_column(String(120))
 
     spatial_resolution: Mapped[str] = mapped_column(String(120))
@@ -244,10 +189,10 @@ class Source(db.Model, Serializable):
     region_select: Mapped[str] = mapped_column(Text())
     time_select: Mapped[str] = mapped_column(Text())
 
-    questions: Mapped[list["QuestionSource"]] = relationship(
+    questions: Mapped[list["Question"]] = relationship(
         back_populates="source",
         cascade="all, delete-orphan",
-        lazy="immediate",
+        lazy="selectin",
         join_depth=3,
     )
 
@@ -259,10 +204,6 @@ class Source(db.Model, Serializable):
     @property
     def spatial_domain(self) -> list[str]:
         return self.spatial_domain_str.split(",")
-
-    @property
-    def available_questions(self) -> list["Question"]:
-        return [qs.question for qs in self.questions]
 
     def __repr__(self):
         return f"Source(id={self.id!r}, name={self.name!r}, table={self.table!r})"
@@ -282,7 +223,7 @@ class Source(db.Model, Serializable):
             return self.id == other.id
         return False
 
-    def as_dict(self):
+    def as_dict(self, **kwargs):
         return {
             "id": self.id,
             "name": self.name,
@@ -301,13 +242,13 @@ class Source(db.Model, Serializable):
 # association used for geographic hierarchy
 geography_association = Table(
     "geography_association",
-    db.Model.metadata,
+    Base.metadata,
     Column("parent_id", ForeignKey("geography.id"), primary_key=True),
     Column("child_id", ForeignKey("geography.id"), primary_key=True),
 )
 
 
-class GeographyVariant(db.Model):
+class GeographyVariant(Base):
     __tablename__ = "geography_variant"
 
     id: Mapped[str] = mapped_column(String(120), primary_key=True)
@@ -317,7 +258,7 @@ class GeographyVariant(db.Model):
     where_clause: Mapped[str] = mapped_column(Text())
 
 
-class GeographyFilter(db.Model):
+class GeographyFilter(Base):
     __tablename__ = "geography_filter"
 
     id: Mapped[str] = mapped_column(String(120), primary_key=True)
@@ -327,7 +268,7 @@ class GeographyFilter(db.Model):
     where_clause: Mapped[str] = mapped_column(Text())
 
 
-class Geography(db.Model, Serializable):
+class Geography(Serializable, Base):
     """Represents a type of place, or a geographic level.
 
     e.g. neighborhood, parcel, tract
@@ -396,7 +337,7 @@ class Geography(db.Model, Serializable):
                 return subgeog
         return None
 
-    def as_dict(self):
+    def as_dict(self, **kwargs):
         return {
             "id": self.id,
             "name": self.name,
@@ -411,21 +352,21 @@ class Geography(db.Model, Serializable):
 # associations for map many-to-many relations
 map_config_geography_assoc = Table(
     "map_geography_association",
-    db.Model.metadata,
+    Base.metadata,
     Column("map_config_id", ForeignKey("map_config.id"), primary_key=True),
     Column("geog_id", ForeignKey("geography.id"), primary_key=True),
 )
 
 map_config_question_assoc = Table(
     "map_config_question_association",
-    db.Model.metadata,
+    Base.metadata,
     Column("map_config_id", ForeignKey("map_config.id"), primary_key=True),
     Column("question_id", ForeignKey("question.id"), primary_key=True),
 )
 
 map_config_variant_question_assoc = Table(
     "map_config_variant_question_association",
-    db.Model.metadata,
+    Base.metadata,
     Column(
         "map_config_variant_id",
         ForeignKey("map_config_variant.map_config_id"),
@@ -435,7 +376,7 @@ map_config_variant_question_assoc = Table(
 )
 
 
-class MapConfigVariant(db.Model, Serializable):
+class MapConfigVariant(Serializable, Base):
     """Stores options for MapConfig variants"""
 
     __tablename__ = "map_config_variant"
@@ -462,13 +403,13 @@ class MapConfigVariant(db.Model, Serializable):
     def name(self) -> str:
         return f"{self.map_config.name} {self.variant} Variant"
 
-    def as_dict(self):
+    def as_dict(self, **kwargs):
         return {
             "questions": [{"id": q.id, "name": q.name} for q in self.questions],
         }
 
 
-class MapConfig(db.Model, Serializable):
+class MapConfig(Serializable, Base):
     """Stores map options."""
 
     __tablename__ = "map_config"
@@ -506,7 +447,7 @@ class MapConfig(db.Model, Serializable):
         join_depth=3,
     )
 
-    def as_dict(self):
+    def as_dict(self, **kwargs):
         return {
             "id": self.id,
             "name": self.name,
@@ -681,7 +622,7 @@ class QuestionSet:
         self.questions.add(question)
 
     def _validate_question(self, question: "Question") -> None:
-        if self.source.id not in [qs.source.id for qs in question.sources]:
+        if self.source.id != question.source.id:
             raise ValueError(
                 "Questions in QuestionSet must all share a common source. "
                 f"Test failed for {question}"
@@ -693,9 +634,7 @@ class QuestionSet:
     def get_query_at_geog(self, geog: "Geography") -> str:
         """Returns a query for table of raw data for each question across the regions and time axis."""
         # the raw value select statements chunks for each of the questions in this set
-        question_select_chunks = [
-            q.get_question_source_for_geog(geog).value_clause for q in self.questions
-        ]
+        question_select_chunks = [q.value_clause for q in self.questions]
 
         return f"""
           SELECT ({self.source.region_select})  as "region",
@@ -703,26 +642,6 @@ class QuestionSet:
                  {", ".join(question_select_chunks)}
           FROM {self.source.table}
         """.strip()
-
-    @staticmethod
-    def from_questions(
-        questions: Sequence["Question"],
-        geog: "Geography",
-    ) -> Sequence["QuestionSet"]:
-        """Generate QuestionSets from heterogeneous (source-wise) questions.
-        One set for each source used at `geog`.
-        """
-        source_to_questions = {}
-        for question in questions:
-            question_source = question.get_question_source_for_geog(geog)
-            # start queryset first with source
-            if question_source.source.id not in source_to_questions:
-                source_to_questions[question_source.source.id] = QuestionSet(
-                    source=question_source.source
-                )
-            # add question for QuestionSet with its source at this geog
-            source_to_questions[question_source.source.id].add_question(question)
-        return list(source_to_questions.values())
 
     def __add__(self, other: "QuestionSet") -> "QuestionSet":
         if self.source.id != other.source.id:

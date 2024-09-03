@@ -1,8 +1,4 @@
 id: prevsaleprice2
 name: Previous Sale Price 2
 datatype: continuous
-sources:
-- geog: parcel
-  source_id: property-assessments
-  value_select: |-
-    "PREVSALEPRICE2"
+source: property-assessments

@@ -1,8 +1,4 @@
 id: cdudesc
 name: Dwelling - CDU Description
 datatype: discrete
-sources:
-- geog: parcel
-  source_id: property-assessments
-  value_select: |-
-    "CDUDESC"
+source: property-assessments

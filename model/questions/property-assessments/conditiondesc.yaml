@@ -1,8 +1,4 @@
 id: conditiondesc
 name: Dwelling - Condition Description
 datatype: discrete
-sources:
-- geog: parcel
-  source_id: property-assessments
-  value_select: |-
-    "CONDITIONDESC"
+source: property-assessments

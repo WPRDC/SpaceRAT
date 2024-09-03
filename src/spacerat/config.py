@@ -1,4 +1,3 @@
-import uuid
 from os import PathLike
 from pathlib import Path
 from typing import Type
@@ -12,7 +11,6 @@ from spacerat.models import (
     Source,
     Question,
     Geography,
-    QuestionSource,
     GeographyVariant,
     GeographyFilter,
     MapConfig,
@@ -53,26 +51,13 @@ def _load_geog(**kwargs) -> Geography:
 
 
 def _load_question(**kwargs) -> Question:
-    raw_sources = kwargs["sources"]
-    del kwargs["sources"]
+    source_id = kwargs["source"]
+    del kwargs["source"]
     question = Question(**kwargs)
     # connect sources
     with Session(_engine) as session:
-        for source_config in raw_sources:
-            geog = session.scalars(
-                select(Geography).where(Geography.id == source_config["geog"])
-            ).first()
-
-            source = session.scalars(
-                select(Source).where(Source.id == source_config["source_id"])
-            ).first()
-            question_source = QuestionSource(
-                geography=geog,
-                value_select=source_config["value_select"],
-            )
-            question_source.source = source
-            question.sources.append(question_source)
-            session.add(question_source)
+        source = session.scalars(select(Source).where(Source.id == source_id)).first()
+        question.source = source
         session.commit()
     return question
 
@@ -152,7 +137,7 @@ def _has_new_files(config_dir: Path, model: Type[Base]) -> bool:
     return len(list(config_dir.glob("**/*.yaml"))) > len(objs)
 
 
-def init_db(engine: Engine, model_dir: PathLike, drop=False) -> Engine:
+def init_db(engine: Engine, model_dir: PathLike, drop=False, skip_maps=False) -> Engine:
     global _engine
     _engine = engine
     model_dir = Path(model_dir)
@@ -174,7 +159,7 @@ def init_db(engine: Engine, model_dir: PathLike, drop=False) -> Engine:
     # load Geographies
     if _has_new_files(geogs_dir, Geography):
         print("loading new Geographies")
-
+        _load_geog()
         _init_model(geogs_dir, _load_geog)
 
         # link geogs
@@ -201,7 +186,7 @@ def init_db(engine: Engine, model_dir: PathLike, drop=False) -> Engine:
         _init_model(questions_dir, _load_question)
 
     # load Maps
-    if _has_new_files(maps_dir, MapConfig):
+    if not skip_maps and _has_new_files(maps_dir, MapConfig):
         print("loading new Maps")
         _init_model(maps_dir, _load_map)
 

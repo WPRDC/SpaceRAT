@@ -1,8 +1,4 @@
 id: legal3
 name: Legal Description 3
 datatype: discrete
-sources:
-- geog: parcel
-  source_id: property-assessments
-  value_select: |-
-    "LEGAL3"
+source: property-assessments

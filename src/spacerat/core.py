@@ -58,6 +58,7 @@ class SpaceRAT:
         model_dir: PathLike = SPACERAT_MODEL_DIR,
         debug: bool = False,
         skip_init=True,
+        skip_maps=False,
     ) -> None:
         """
         Initialize a SpaceRAT instance.
@@ -79,7 +80,12 @@ class SpaceRAT:
         if skip_init:
             self.engine = _engine
         else:
-            self.engine = init_db(_engine, model_dir)
+            self.engine = init_db(_engine, model_dir, skip_maps=skip_maps)
+
+    def reinit(self, skip_maps: bool = False) -> None:
+        self.engine = init_db(
+            self.engine, model_dir=self.model_dir, skip_maps=skip_maps
+        )
 
     @property
     def db_url(self) -> str:
@@ -296,7 +302,7 @@ class SpaceRAT:
         source = self.get_source(source_id)
 
         # get set of questions to use
-        questions = source.available_questions
+        questions = source.questions
 
         if included_questions:
             questions = [q for q in questions if q.id in included_questions]
@@ -467,6 +473,12 @@ class SpaceRAT:
 
         # find subgeog that works for this question, could be region if it directly answers it
         geog: Geography = regions.geog_level
+
+        # todo: handle questions for point-level sources
+        #   - this means no subgeog
+        #   - directly aggregate from geog
+        #   - can't return inside query
+        #   -
         subgeog: Geography = regions.geog_level.get_subgeography_for_question(questions)
 
         geog_field = slugify(geog.id, separator="_")
@@ -478,7 +490,7 @@ class SpaceRAT:
 
         # get query to get raw data table
         raw_select_chunks = [
-            q.get_question_source_for_geog(subgeog).value_clause for q in questions
+            q.value_clause for q in questions
         ]  # [ '"source_field_name" as "question_field_name"', ... ]
 
         source_query = f"""
@@ -683,10 +695,10 @@ class SpaceRAT:
             raise ValueError("No Source found for this Question at this Geography.")
 
         for question in questions[1:]:
-            test_source = question.get_question_source_for_geog(subgeog)
+            test_source = question.source
             if not test_source:
                 raise ValueError("No source found for this Question at this Geography.")
-            if test_source.source != first_source:
+            if test_source != first_source:
                 raise ValueError(
                     "The Questions provided don't use the same Source for this geography."
                 )

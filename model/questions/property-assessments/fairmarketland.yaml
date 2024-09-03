@@ -1,8 +1,4 @@
 id: fairmarketland
 name: Fair Market Land Value
 datatype: continuous
-sources:
-- geog: parcel
-  source_id: property-assessments
-  value_select: |-
-    "FAIRMARKETLAND"
+source: property-assessments

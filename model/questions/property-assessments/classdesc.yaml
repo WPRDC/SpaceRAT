@@ -1,8 +1,4 @@
 id: classdesc
 name: Class Description
 datatype: discrete
-sources:
-- geog: parcel
-  source_id: property-assessments
-  value_select: |-
-    "CLASSDESC"
+source: property-assessments

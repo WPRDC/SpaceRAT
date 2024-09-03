@@ -1,14 +1,11 @@
 id: property-assessments
 name: Property Assessments
 table: property_assessments
-
 spatial_resolution: parcel
 spatial_domain:
   - county.42003
-
 temporal_resolution: month
 temporal_domain_name: current
-
 region_select: >
   "PARID"
 time_select: CURRENT_DATE::timestamp

@@ -1,8 +1,4 @@
 id: salecode
 name: Sale Validity Code
 datatype: discrete
-sources:
-- geog: parcel
-  source_id: property-assessments
-  value_select: |-
-    "SALECODE"
+source: property-assessments

@@ -14,7 +14,3 @@ query: >
   FROM "e86e5f45-3a28-429b-af53-1802a1db7243"
   WHERE "STATEFP" = '42'
     AND "COUNTYFP" IN ('003', '007', '019', '005', '129', '051', '125', '059')
-
-
-
-#todo: limit to local counties

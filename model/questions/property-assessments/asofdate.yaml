@@ -1,8 +1,4 @@
 id: asofdate
 name: ''
 datatype: continuous
-sources:
-- geog: parcel
-  source_id: property-assessments
-  value_select: |-
-    "ASOFDATE"
+source: property-assessments

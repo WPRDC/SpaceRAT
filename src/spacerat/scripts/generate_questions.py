@@ -1,15 +1,13 @@
 import os
-from base64 import urlsafe_b64encode
 from pathlib import Path
 from uuid import uuid4
 
-import yaml
 from ckanapi import RemoteCKAN
 from slugify import slugify
 from sqlalchemy.orm import Session
 
 from spacerat import SpaceRAT
-from spacerat.models import Source, Question, QuestionSource
+from spacerat.models import Source, Question
 from spacerat.types import DataType
 
 try:
@@ -105,7 +103,7 @@ def generate_questions_for_source(source: "Source", rat: SpaceRAT):
         # prevent duplicate IDs
         if rat.has_question(_id):
             print("Duplicate ID found:", _id, end="")
-            _id += _random_str().lower()
+            _id += f"_{_random_str().lower()}"
             print(". using", _id)
 
         # load question into ontology
@@ -113,19 +111,16 @@ def generate_questions_for_source(source: "Source", rat: SpaceRAT):
             question = Question(
                 id=_id,
                 name=field["info"]["label"] if "info" in field else field["id"],
+                source=source,
                 datatype=datatype_map(field["type"]),
-            )
-            question_source = QuestionSource(
-                source_id=source.id,
-                geography_id=source.spatial_resolution,
                 value_select=f'"{field["id"]}"',
             )
-            question.sources.append(question_source)
-            session.add_all([question, question_source])
+            session.add(question)
+            session.commit()
 
-        # dump question yaml
-        with open(output_dir / f"{_id}.yaml", "w") as f:
-            counter += 1
-            f.write(question.as_yaml())
+            # dump question yaml
+            with open(output_dir / f"{_id}.yaml", "w") as f:
+                counter += 1
+                f.write(question.as_yaml())
 
     return counter

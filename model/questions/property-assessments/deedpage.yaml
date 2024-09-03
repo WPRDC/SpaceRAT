@@ -1,8 +1,4 @@
 id: deedpage
 name: Page Number
 datatype: discrete
-sources:
-- geog: parcel
-  source_id: property-assessments
-  value_select: |-
-    "DEEDPAGE"
+source: property-assessments
