@@ -1,0 +1,6 @@
+id: ownercode
+name: Owner Type Code 1
+datatype: discrete
+source: property-assessments
+value_select: |-
+  "OWNERCODE"

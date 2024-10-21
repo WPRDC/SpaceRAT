@@ -1,0 +1,6 @@
+id: stories
+name: Dwelling - Number of Stories
+datatype: discrete
+source: property-assessments
+value_select: |-
+  "STORIES"

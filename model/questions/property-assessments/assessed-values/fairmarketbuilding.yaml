@@ -1,0 +1,8 @@
+id: fairmarketbuilding
+name: Fair Market Assessed Building Value
+description: The base year appraised fair market value of the building. This value has had no reductions, not even Clean and Green preferential assessment reduction. Allegheny County currently uses a base year of 2012.
+datatype: continuous
+source: property-assessments
+value_select: |-
+  "FAIRMARKETBUILDING"
+format: money

@@ -1,0 +1,6 @@
+id: roof
+name: Dwelling - Roof
+datatype: discrete
+source: property-assessments
+value_select: |-
+  "ROOF"

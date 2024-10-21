@@ -1,4 +1,8 @@
 id: yearblt
-name: Dwelling - Year Built
+name: Year Built
+description: The year the primary strcuture on the parcel was built.
 datatype: continuous
 source: property-assessments
+value_select: |-
+  "YEARBLT"
+format: raw

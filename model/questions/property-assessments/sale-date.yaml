@@ -1,0 +1,8 @@
+id: sale-date
+name: Date of last sale
+description: Date on which the parcel was last bought/sold.
+datatype: date
+source: property-assessments
+value_select: |-
+  "SALEDATE"::date
+format: date

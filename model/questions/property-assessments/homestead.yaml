@@ -1,0 +1,7 @@
+id: homestead
+name: Has Homestead Exemption
+description: Parcels for which the owner is the primary resident.
+datatype: boolean
+source: property-assessments
+value_select: |-
+  "HOMESTEADFLAG" IS NOT NULL

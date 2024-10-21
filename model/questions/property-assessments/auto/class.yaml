@@ -1,0 +1,6 @@
+id: class
+name: Class
+datatype: boolean
+source: property-assessments
+value_select: |-
+  "CLASS" = "R"

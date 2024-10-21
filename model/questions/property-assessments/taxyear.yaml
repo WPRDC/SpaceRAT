@@ -1,4 +1,0 @@
-id: taxyear
-name: The current certified tax year
-datatype: continuous
-source: property-assessments

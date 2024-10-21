@@ -1,0 +1,7 @@
+id: new-construction
+name: New Construction (1978 and after)
+description: Parcels for which the primary structure was built after 1975.
+datatype: boolean
+source: property-assessments
+value_select: |-
+  "YEARBLT" >= 1978

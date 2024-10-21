@@ -1,0 +1,6 @@
+id: grade
+name: Dwelling - Grade
+datatype: discrete
+source: property-assessments
+value_select: |-
+  "GRADE"

@@ -1,0 +1,6 @@
+id: totalrooms
+name: Dwelling - Total Rooms
+datatype: continuous
+source: property-assessments
+value_select: |-
+  "TOTALROOMS"

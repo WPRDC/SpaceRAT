@@ -1,4 +1,0 @@
-id: propertyaddress
-name: Property Location Street Name
-datatype: discrete
-source: property-assessments

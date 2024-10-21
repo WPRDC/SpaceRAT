@@ -13,6 +13,7 @@ from sqlalchemy import (
     Column,
     PickleType,
     UniqueConstraint,
+    Boolean,
 )
 from sqlalchemy.orm import (
     DeclarativeBase,
@@ -29,7 +30,7 @@ from spacerat.helpers import (
     get_aggregate_fields,
     tileserver_url,
 )
-from spacerat.types import TemporalResolution, DataType, TemporalDomain
+from spacerat.types import TemporalResolution, DataType, TemporalDomain, ValueFormat
 
 _combine_dt = datetime.datetime.combine
 
@@ -70,10 +71,13 @@ class Serializable:
         )
 
     def as_brief(self) -> dict:
-        return {
+        result = {
             "id": self.id,
             "name": self.name,
         }
+        if hasattr(self, "description"):
+            result["description"] = self.description
+        return result
 
 
 class Question(Serializable, Base):
@@ -85,6 +89,8 @@ class Question(Serializable, Base):
 
     __tablename__ = "question"
 
+    description: Mapped[str] = mapped_column(Text(), default="")
+
     source_id: Mapped[str] = mapped_column(ForeignKey("source.id"))
     source: Mapped["Source"] = relationship(
         back_populates="questions", lazy="selectin", join_depth=3
@@ -92,6 +98,10 @@ class Question(Serializable, Base):
 
     datatype: Mapped[DataType] = mapped_column(String(20))
     value_select: Mapped[str] = mapped_column(Text())
+
+    format: Mapped[ValueFormat] = mapped_column(String(20), default="number")
+
+    # todo: support variants and filters
 
     def __repr__(self):
         return (
@@ -155,13 +165,18 @@ class Question(Serializable, Base):
             spatial_domain_str = ",".join(spatial_domain)
         return Source(**kwargs, spatial_domain_str=spatial_domain_str)
 
-    def as_dict(self, expand: bool = True) -> dict:
+    def as_dict(self, expand: bool = True, brief: bool = False) -> dict:
         result = {
             "id": self.id,
             "name": self.name,
+            "description": self.description,
             "datatype": self.datatype,
-            "source": self.source.as_dict() if expand else self.source.id,
+            "format": self.format,
         }
+        if not brief:
+            result["source"] = (self.source.as_dict() if expand else self.source.id,)
+            result["value_select"] = (_sql(self.value_select),)
+
         return result
 
 
@@ -186,7 +201,7 @@ class Source(Serializable, Base):
         DateTime(), nullable=True
     )
 
-    region_select: Mapped[str] = mapped_column(Text())
+    region_select: Mapped[str] = mapped_column(Text(), nullable=True)
     time_select: Mapped[str] = mapped_column(Text())
 
     questions: Mapped[list["Question"]] = relationship(
@@ -200,6 +215,8 @@ class Source(Serializable, Base):
         "MapConfig",
         back_populates="source",
     )
+
+    archived: Mapped[bool] = mapped_column(Boolean(), default=False)
 
     @property
     def spatial_domain(self) -> list[str]:
@@ -255,6 +272,10 @@ class GeographyVariant(Base):
     geography_id: Mapped[str] = mapped_column(
         ForeignKey("geography.id"), primary_key=True
     )
+
+    name: Mapped[str] = mapped_column(String(120))
+    description: Mapped[str] = mapped_column(Text(), default="")
+
     where_clause: Mapped[str] = mapped_column(Text())
 
 
@@ -316,6 +337,8 @@ class Geography(Serializable, Base):
     )
 
     trigram_indexes: Mapped[list[str]] = mapped_column(PickleType(), default=[])
+
+    extra_fields: Mapped[list[str]] = mapped_column(PickleType(), default=[])
 
     def __repr__(self):
         return f"Geography(id={self.id!r}, name={self.name!r}, table={self.table!r})"
@@ -380,16 +403,17 @@ class MapConfigVariant(Serializable, Base):
     """Stores options for MapConfig variants"""
 
     __tablename__ = "map_config_variant"
-    __table_args__ = (UniqueConstraint("map_config_id", "variant"),)
+    __table_args__ = (UniqueConstraint("map_config_id", "variant_id"),)
 
     id: Mapped[str] = mapped_column(primary_key=True)
-
     map_config_id: Mapped[str] = mapped_column(ForeignKey("map_config.id"))
     map_config: Mapped["MapConfig"] = relationship(
         "MapConfig", back_populates="variants"
     )
 
-    variant: Mapped[str] = mapped_column(String(60))
+    variant_id: Mapped[str] = mapped_column(ForeignKey("geography_variant.id"))
+    variant: Mapped["GeographyVariant"] = relationship(lazy="immediate")
+
     questions: Mapped[list["Question"]] = relationship(
         "Question",
         secondary=map_config_variant_question_assoc,
@@ -405,7 +429,9 @@ class MapConfigVariant(Serializable, Base):
 
     def as_dict(self, **kwargs):
         return {
-            "questions": [{"id": q.id, "name": q.name} for q in self.questions],
+            "name": self.variant.name,
+            "description": self.variant.description,
+            "questions": [q.as_dict(brief=True) for q in self.questions],
         }
 
 
@@ -454,18 +480,21 @@ class MapConfig(Serializable, Base):
             "description": self.description,
             "source": self.source.as_dict(),
             "geographies": [{"id": g.id, "name": g.name} for g in self.geographies],
-            "questions": [{"id": q.id, "name": q.name} for q in self.questions],
+            "questions": [q.as_dict(brief=True) for q in self.questions],
             "tilejsons": self.tile_jsons(),
             "variants": {
-                mv.variant: {"tilejsons": self.tile_jsons(mv.variant), **mv.as_dict()}
+                mv.variant_id: {
+                    "tilejsons": self.tile_jsons(mv.variant_id),
+                    **mv.as_dict(brief=True),
+                }
                 for mv in self.variants
             },
         }
 
-    def get_view_name(self, geog_id: str, variant: str | None = None) -> str:
+    def get_view_name(self, geog_id: str, variant_id: str | None = None) -> str:
         source = slugify(self.source_id, separator="_")
         geog = slugify(geog_id, separator="_")
-        variant = slugify(variant, separator="_") if variant else ""
+        variant = slugify(variant_id, separator="_") if variant_id else ""
         return f"map__{source}__{geog}__{variant}".rstrip("_")
 
     def tile_jsons(self, variant: str = None) -> dict:
@@ -490,9 +519,9 @@ class TimeAxis:
     def __init__(
         self,
         resolution: TemporalResolution,
-        domain: TemporalDomain
-        | tuple[datetime.datetime, datetime.datetime]
-        | tuple[str, str],
+        domain: Union[
+            TemporalDomain, tuple[datetime.datetime, datetime.datetime], tuple[str, str]
+        ],
     ):
         self.resolution = resolution
         now = datetime.datetime.now()
@@ -500,10 +529,12 @@ class TimeAxis:
         midnight = datetime.time()
         eod = datetime.time(hour=23, minute=59, second=59)
 
+        # convert named domains to datetime pairs
         if isinstance(domain, str):
             self.domain_name = domain
             if domain == "current":
-                self.domain = (None, None)
+                start = datetime.datetime.now() - parse_period_name(resolution)
+                self.domain = (start, None)
 
             elif domain.startswith("past-"):
                 start = datetime.datetime.now() - parse_period_name(domain[5:])
@@ -573,13 +604,13 @@ class TimeAxis:
     @property
     def domain_filter(self) -> str | None:
         if self.start and self.end:
-            return f"BETWEEN {self.start.isoformat()} AND {self.end.isoformat()}"
+            return f"BETWEEN '{self.start.isoformat()}' AND '{self.end.isoformat()}'"
 
         elif self.start:
-            return f"> {self.start.isoformat()}"
+            return f"> '{self.start.isoformat()}'"
 
         elif self.end:
-            return f"< {self.end.isoformat()}"
+            return f"< '{self.end.isoformat()}'"
         else:
             return None
 

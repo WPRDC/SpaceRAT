@@ -1,4 +1,0 @@
-id: countyland
-name: County Assessed Value for Land
-datatype: continuous
-source: property-assessments

@@ -1,16 +1,16 @@
 import os
-from email.policy import default
 
 from flask import Flask, request, abort
-from flask_sqlalchemy import SQLAlchemy
+
 from spacerat.core import QuestionParam, RegionParam, SpaceRAT
 from spacerat.helpers import by_region
-from spacerat.models import TimeAxis, Base
+from spacerat.models import TimeAxis
 
 app = Flask(__name__)
 
 app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("SPACERAT_DB_URL")
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+app.config['APPLICATION_ROOT'] = os.environ.get("APPLICATION_ROOT")
 
 
 def parse_param(param: str) -> str or list[str]:
@@ -106,3 +106,30 @@ def show_geography(geog_id: str):
 @app.route("/maps/<map_id>")
 def show_maps(map_id: str):
     return _show_model("map_config", map_id)
+
+
+@app.route("/breaks/")
+def get_breaks():
+    try:
+        mapset_id = request.args["mapset"]
+        geog_level = request.args["geog"]
+        question_id = request.args["question"]
+        stat = request.args["stat"]
+        variant = request.args.get("variant")
+        n_classes = request.args.get("bin")
+
+    except KeyError:
+        abort(400, "mapset, geog, question, and stat parameters are required.")
+
+    rat = SpaceRAT()
+
+    return {
+        "results": rat.calculate_breaks(
+            mapset_id,
+            geog_level,
+            question_id,
+            stat,
+            variant=variant,
+            n_classes=n_classes,
+        ),
+    }

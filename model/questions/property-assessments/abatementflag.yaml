@@ -1,4 +1,7 @@
 id: abatementflag
-name: Abatement Flag
-datatype: discrete
+name: County Tax Abatement
+description: Parcel's receiving a reduction in County assessment due to a County-approved incentive program.
+datatype: boolean
 source: property-assessments
+value_select: |-
+  "ABATEMENTFLAG" IS NOT NULL

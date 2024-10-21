@@ -1,4 +1,0 @@
-id: countybuilding
-name: County Assessed Value for Building
-datatype: continuous
-source: property-assessments

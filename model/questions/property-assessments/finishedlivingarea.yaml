@@ -1,4 +1,7 @@
 id: finishedlivingarea
-name: Finished living area, as measured from the outside of the structure.
+name: Living Area
+description: Total square feet of living area, as measured from outside the structure.
 datatype: continuous
 source: property-assessments
+value_select: |-
+  "FINISHEDLIVINGAREA"

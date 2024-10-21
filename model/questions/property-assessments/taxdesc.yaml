@@ -1,4 +1,0 @@
-id: taxdesc
-name: Tax Status Description
-datatype: discrete
-source: property-assessments

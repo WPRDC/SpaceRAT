@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime
 import os
 import re
 from os import PathLike
@@ -7,16 +8,17 @@ from pathlib import Path
 from typing import TypeVar, Type, Sequence, Mapping, Any, Iterable, Literal
 from urllib.parse import urlparse
 
+import jenkspy
 import psycopg2
 import psycopg2.extras
+from ckanapi import RemoteCKAN
 from psycopg2.sql import Composable
 from slugify import slugify
 from sqlalchemy import Engine, create_engine, select, ColumnExpressionArgument
 from sqlalchemy.orm import Session
 
-
 from spacerat.config import init_db
-from spacerat.helpers import get_subgeog_clause
+from spacerat.helpers import get_subgeog_clause, parse_period_name
 from spacerat.models import (
     Question,
     TimeAxis,
@@ -44,6 +46,10 @@ SPACERAT_DATASTORE_READ_URL = os.environ.get("SPACERAT_DATASTORE_URL")
 SPACERAT_DATASTORE_WRITE_URL = os.environ.get("SPACERAT_DATASTORE_WRITE_URL")
 SPACERAT_SCHEMA = os.environ.get("SPACERAT_SCHEMA", "spacerat")
 SPACERAT_MODEL_DIR = os.environ.get("SPACERAT_MODEL_DIR", Path(os.getcwd()) / "model")
+
+ckan_url = os.environ.get("CKAN_URL", "https://data.wprdc.org")
+
+ckan = RemoteCKAN(ckan_url)
 
 
 class SpaceRAT:
@@ -214,7 +220,7 @@ class SpaceRAT:
         # create any extra indexes
         for index in geog.trigram_indexes:
             self._write_to_db(
-                f"CREATE INDEX {geog.table}__{slugify(index, separator='_')}__idx "
+                f"CREATE INDEX {geog.table}__{slugify(index, separator='_')}__trgm_idx "
                 f"ON {table} USING GIN ({index} gin_trgm_ops)"
             )
 
@@ -251,7 +257,6 @@ class SpaceRAT:
         for geog in map_config.geographies:
             # make standard map
             name = map_config.get_view_name(geog.id)
-            print(name)
             self.create_map_table(
                 geog.id,
                 map_config.source_id,
@@ -262,13 +267,12 @@ class SpaceRAT:
 
             # make map for each variant
             for map_variant in map_config.variants:
-                name = map_config.get_view_name(geog.id, variant=map_variant.variant)
-                print(name)
+                name = map_config.get_view_name(geog.id, variant_id=map_variant.id)
                 variant_questions = [q.id for q in map_variant.questions]
                 self.create_map_table(
                     geog.id,
                     map_config.source_id,
-                    variant=map_variant.variant,
+                    variant=map_variant.variant_id,
                     included_questions=base_questions + variant_questions,
                     replace=replace,
                     view_name=name,
@@ -319,9 +323,6 @@ class SpaceRAT:
             geom="raw",
         )
 
-        # todo: create indexes on map tables
-        # todo: register the maps somewhere
-
         # create materialized view from the query
         view_name = view_name or slugify(
             f"{source_id}__{geog_level}__{variant or ''}", separator="_"
@@ -345,6 +346,30 @@ class SpaceRAT:
             f"CREATE INDEX IF NOT EXISTS {view_name}__region_id__idx "
             f"ON {full_view_name} (region_id)"
         )
+
+    def calculate_breaks(
+        self,
+        mapset_id: str,
+        geog_level: str,
+        question_id: str,
+        stat: str,
+        variant: str = None,
+        n_classes=5,
+    ) -> list[float] | None:
+        n_classes = 5 if n_classes is None else n_classes
+
+        # use args to find map table
+        mapset = self.get_map_config(mapset_id)
+        question = self.get_question(question_id)
+        table = mapset.get_view_name(geog_level, variant_id=variant)
+        field = f"{question.field_name}__{stat}"
+
+        # calculate the breaks from the map data
+        qry = f"""SELECT "{field}" as value FROM "{self.schema}"."{table}" """
+        data: list[float] = [row["value"] for row in self._query_db(qry)]
+        jnb = jenkspy.JenksNaturalBreaks(n_classes)
+        jnb.fit(data)
+        return jnb.inner_breaks_
 
     def get_queries(
         self,
@@ -371,6 +396,14 @@ class SpaceRAT:
         region_set, question_set, time_axis = self._parse_args(
             question, region, time_axis
         )
+
+        if question_set.source.spatial_resolution == "point":
+            return self._get_direct_query(
+                questions=question_set,
+                regions=region_set,
+                time_axis=time_axis,
+                geom=geom,
+            )
 
         return self._get_query(
             questions=question_set,
@@ -448,6 +481,78 @@ class SpaceRAT:
             geom=geom,
         )
 
+    def _check_cache(self, view_name: str) -> bool:
+        results = self._query_db(
+            f"SELECT EXISTS(SELECT FROM pg_matviews WHERE schemaname LIKE '{self.schema}' AND matviewname LIKE '{view_name}');"
+        )
+        return results[0]["exists"]
+
+    def _get_direct_query(
+        self,
+        questions: QuestionSet,
+        regions: RegionSet,
+        time_axis: TimeAxis,
+        geom: GeomOption = None,
+    ):
+        source: Source = questions.source
+        temporal_resolution = source.temporal_resolution
+        geog: Geography = regions.geog_level
+
+        # standardize select statements
+        raw_select_chunks = [
+            q.value_clause for q in questions
+        ]  # [ '"source_field_name" as "question_field_name"', ... ]
+
+        source_query = f"""
+              SELECT _geom                     as "geom",
+                     ({source.time_select})    as "time",
+                     {", ".join(raw_select_chunks)}
+              FROM "{source.table}"
+            """.strip()
+
+        agg_select_chunks = [q.aggregate_select_chunk for q in questions]
+
+        # handle filtering data
+        time_filter_clause = (
+            f""" "{TIME_FIELD}" {time_axis.domain_filter} """
+            if time_axis.domain_filter
+            else ""
+        )
+
+        has_filters = bool(time_filter_clause)
+
+        inner_where_clause = f"WHERE {time_filter_clause} " if has_filters else ""
+
+        # todo: limit to time axis
+
+        inside_query = f"""
+                SELECT date_trunc('{temporal_resolution}', "time") as "{TIME_FIELD}",  
+                               {", ".join([q.field_name for q in questions])}, 
+                               geog.geom,
+                               geog.id                             as "region_id"
+
+                FROM ({source_query}) as raw_data 
+                  JOIN "{self.schema}"."{geog.table}" as geog
+                    ON ST_Covers(geog.geom, raw_data.geom)
+                {inner_where_clause}
+            """.strip()
+
+        geo_select, geo_join = self._get_geog_select_and_join(geog, geom)
+
+        query = f"""
+             SELECT data.* {geo_select}
+             FROM (SELECT 
+                     "{TIME_FIELD}",
+                     {', '.join(agg_select_chunks)}, 
+                     '{geog.id}.' || "region_id"     as region,
+                     region_id
+                   FROM ({inside_query}) time_filtered 
+                   GROUP BY region_id, time) data
+               {geo_join}
+             """
+
+        return query, inside_query
+
     def _get_query(
         self,
         questions: QuestionSet,
@@ -474,11 +579,6 @@ class SpaceRAT:
         # find subgeog that works for this question, could be region if it directly answers it
         geog: Geography = regions.geog_level
 
-        # todo: handle questions for point-level sources
-        #   - this means no subgeog
-        #   - directly aggregate from geog
-        #   - can't return inside query
-        #   -
         subgeog: Geography = regions.geog_level.get_subgeography_for_question(questions)
 
         geog_field = slugify(geog.id, separator="_")
@@ -493,11 +593,12 @@ class SpaceRAT:
             q.value_clause for q in questions
         ]  # [ '"source_field_name" as "question_field_name"', ... ]
 
+
         source_query = f"""
               SELECT ({source.region_select})  as "region",
                      ({source.time_select})    as "time",
                      {", ".join(raw_select_chunks)}
-              FROM {source.table}
+              FROM "{source.table}"
             """.strip()
 
         # determine aggregate fields to use based on datatype these are part top-most select clause
@@ -542,29 +643,29 @@ class SpaceRAT:
 
         inner_where_clause = f"WHERE {filters} " if has_filters else ""
 
+        # pull extra fields from subgeog (e.g. address of parcel)
+        extra_fields_select_clause: str  = ''
+        if subgeog.extra_fields:
+            extra_fields_select_clause += ', '
+            extra_fields_select_clause +=  ", ".join([f'subgeogs.{extra_field}' for extra_field in subgeog.extra_fields])
+
+
         # todo: replace all with SQLAlchemy once we know what we're doin'
-        # generate  query that results in region, parent table and is limited to the source's spatial domain
+        # generate query that results in region, parent table and is limited to the source's spatial domain
         inside_query = f"""
                 SELECT date_trunc('{temporal_resolution}', "time") as "{TIME_FIELD}",  
                                {", ".join([q.field_name for q in questions])}, 
                                "region", 
                                regions."{geog_field}"          as "region_id"
+                               {extra_fields_select_clause}
                                
-                FROM ({source_query}) as data 
-                  JOIN "{self.schema}"."{geo_mapping_table}" as regions ON data.region = regions."{subgeog_field}"
+                FROM ({source_query}) as raw_data 
+                  JOIN "{self.schema}"."{geo_mapping_table}" as regions ON raw_data.region = regions."{subgeog_field}"
                   JOIN "{self.schema}"."{subgeog.table}" as subgeogs ON regions."{subgeog_field}" = subgeogs."{subgeog.id_field}"
                 {inner_where_clause} 
             """.strip()
 
-        geo_select = ""
-        if geom == "raw":
-            geo_select = ", geo.geom, geo.centroid"
-        if geom == "geojson":
-            geo_select = ", ST_AsGeoJSON(geo.geom) as geom, ST_AsGeoJSON(geo.centroid) as centroid"
-
-        geo_join = ""
-        if geom:
-            geo_join = f'JOIN "{self.schema}"."{geog.table}" geo ON geo."{geog.id_field}" = data.region_id'
+        geo_select, geo_join = self._get_geog_select_and_join(geog, geom)
 
         query = f"""
         SELECT data.* {geo_select}
@@ -598,17 +699,25 @@ class SpaceRAT:
         query_records: bool = False,
         geom: GeomOption = None,
     ) -> tuple[list[AggregateResultsRow], list]:
-        """Finds result for questions across multiple regions across points across time axis."""
+        """Finds result for questions across multiple regions across points in time axis."""
 
-        query, inside_query = self._get_query(
-            questions=questions,
-            regions=regions,
-            time_axis=time_axis,
-            variant=variant,
-            filter=filter,
-            filter_arg=filter_arg,
-            geom=geom,
-        )
+        if questions.source.spatial_resolution == "point":
+            query, inside_query = self._get_direct_query(
+                questions=questions,
+                regions=regions,
+                time_axis=time_axis,
+                geom=geom,
+            )
+        else:
+            query, inside_query = self._get_query(
+                questions=questions,
+                regions=regions,
+                time_axis=time_axis,
+                variant=variant,
+                filter=filter,
+                filter_arg=filter_arg,
+                geom=geom,
+            )
 
         # query and return requested data
         records = []
@@ -632,11 +741,25 @@ class SpaceRAT:
             region_set.geog_level,
         )
 
-        # default time axis is current
+        # default time axis is current, or most current unit available in source
         if not time_axis:
-            time_axis = TimeAxis(
-                question_set.source.temporal_resolution, domain="current"
-            )
+            source = question_set.source
+            resolution = source.temporal_resolution
+            if question_set.source.archived:
+                end = datetime.datetime.fromisoformat(
+                    ckan.action.datastore_search_sql(
+                        sql=f"""SELECT {source.time_select} as time FROM "{source.table}" ORDER BY time DESC LIMIT 1"""
+                    )["records"][0]["time"]
+                )
+                start = end - parse_period_name(source.temporal_resolution)
+                time_axis = TimeAxis(
+                    resolution,
+                    domain=(start, end),
+                )
+            else:
+                time_axis = TimeAxis(
+                    question_set.source.temporal_resolution, domain="current"
+                )
 
         return region_set, question_set, time_axis
 
@@ -656,6 +779,7 @@ class SpaceRAT:
             if "." in args:
                 return RegionSet(self.get_region(args))
             else:
+                print(args)
                 geog_level = self.get_geography(args)
                 return RegionSet("ALL", geog_level=geog_level)
 
@@ -706,6 +830,21 @@ class SpaceRAT:
         # build a questionset and return it
         return QuestionSet(first_source, *questions)
 
+    def _get_geog_select_and_join(
+        self, geog, geom: GeomOption = None
+    ) -> tuple[str, str]:
+        """Get select statement and join statement used to link final aggregate data with geometries"""
+        geo_select = ""
+        if geom == "raw":
+            geo_select = ", geo.geom, geo.centroid"
+        if geom == "geojson":
+            geo_select = ", ST_AsGeoJSON(geo.geom) as geom, ST_AsGeoJSON(geo.centroid) as centroid"
+
+        geo_join = ""
+        if geom:
+            geo_join = f'JOIN "{self.schema}"."{geog.table}" geo ON geo."{geog.id_field}" = data.region_id'
+        return geo_select, geo_join
+
     def _get_obj(self, model: Type[T], oid: str) -> T | None:
         try:
             with Session(self.engine) as session:
@@ -715,7 +854,8 @@ class SpaceRAT:
                 session.expunge_all()
                 return result
         except Exception as e:
-            raise e
+            print(e)
+            return None
 
     def _get_objs(
         self,
@@ -774,6 +914,7 @@ class SpaceRAT:
         with psycopg2.connect(self.source_write_url) as conn:
             qry = str(re.sub(r"\s+", " ", q).strip())
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                print(qry)
                 cur.execute(qry, params)
         conn.close()
 
@@ -794,3 +935,8 @@ class SpaceRAT:
         region_union = "\nUNION\n".join([rs.extent_query for rs in region_sets])
 
         return f"(SELECT ST_Union(the_geom) FROM ({region_union})) as region_union"
+
+    def get_breaks(
+        self,
+    ):
+        pass

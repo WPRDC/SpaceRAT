@@ -1,4 +1,7 @@
 id: farmsteadflag
-name: Farmstead Flag
-datatype: discrete
+name: Has Farmstead exemption
+description: For farm parcels that at least 10 acres and are the owner's primary residence.
+datatype: boolean
 source: property-assessments
+value_select: |-
+  "FARMSTEADFLAG" IS NOT NULL

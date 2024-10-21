@@ -1,4 +1,7 @@
 id: cleangreen
-name: Clean and Green Flag
-datatype: discrete
+name: Has PA Clean and Green Exemption
+description: Parcels that are receiving a reduction in their assessment due to the state’s Clean and Green preferential assessment program
+datatype: boolean
 source: property-assessments
+value_select: |-
+  "CLEANGREEN" IS NOT NULL

@@ -1,0 +1,8 @@
+id: countyland
+name: County Assessed Value for Land
+description: The assessed property value of the land for county tax purposes. This amount reflects the remaining assessment after any preferential assessments (such as clean & green) or county reductions (such as homesteads or other abatements) have been deducted from the base year market values.
+datatype: continuous
+source: property-assessments
+value_select: |-
+  "COUNTYLAND"
+format: money

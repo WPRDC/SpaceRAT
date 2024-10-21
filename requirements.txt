@@ -1,8 +1,9 @@
 pyyaml
-psycopg2
+psycopg2-binary
 python-slugify
 sqlalchemy
 ckanapi
 Flask
 python-slugify
 click
+jenkspy

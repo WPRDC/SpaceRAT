@@ -1,0 +1,6 @@
+id: request-type
+name: Request type
+datatype: discrete
+source: 311-requests
+value_select: |-
+  "REQUEST_TYPE"

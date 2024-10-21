@@ -1,0 +1,7 @@
+id: brick
+name: Brick building exterior
+description: Parcels with a brick facade.
+datatype: boolean
+source: property-assessments
+value_select: |-
+  "EXTFINISH_DESC" = 'Brick'

@@ -1,0 +1,8 @@
+id: localbuilding
+name: Local Assessed Value for Building
+description: The assessed property value of the building for local tax purposes (for schools and municipalities). This amount reflects the remaining assessment after preferential assessments (such as clean & green) have been deducted from the base year market values. This value is often higher than the county assessed value since county-only incentives (such as homesteads) have not been deducted.
+datatype: continuous
+source: property-assessments
+value_select: |-
+  "LOCALBUILDING"
+format: money

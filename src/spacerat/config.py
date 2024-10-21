@@ -27,6 +27,12 @@ def _load_source(**kwargs) -> Source:
         spatial_domain_str = spatial_domain
     else:
         spatial_domain_str = ",".join(spatial_domain)
+
+    if "region_select" not in kwargs:
+        if kwargs["spatial_resolution"] != "point":
+            raise ValueError("region_select is required")
+
+    # todo: handle variants and filters
     return Source(**kwargs, spatial_domain_str=spatial_domain_str)
 
 
@@ -41,8 +47,13 @@ def _load_geog(**kwargs) -> Geography:
 
     geog = Geography(**kwargs, subgeographies=[])
 
-    for variant, clause in variants.items():
-        geog.variants[variant] = GeographyVariant(id=variant, where_clause=clause)
+    for variant, options in variants.items():
+        geog.variants[variant] = GeographyVariant(
+            id=variant,
+            name=options["name"],
+            description=options.get("description"),
+            where_clause=options["where_clause"],
+        )
 
     for _filter, clause in filters.items():
         geog.filters[_filter] = GeographyFilter(id=_filter, where_clause=clause)
@@ -56,8 +67,7 @@ def _load_question(**kwargs) -> Question:
     question = Question(**kwargs)
     # connect sources
     with Session(_engine) as session:
-        source = session.scalars(select(Source).where(Source.id == source_id)).first()
-        question.source = source
+        question.source_id = source_id
         session.commit()
     return question
 
@@ -66,11 +76,12 @@ def _load_map(**kwargs) -> MapConfig:
     source_id = kwargs["source"]
     raw_geographies = kwargs["geographies"]
     raw_questions = kwargs["questions"]
-    raw_variants = kwargs["variants"]
+    raw_variants = kwargs.get("variants", {})
     del kwargs["source"]
     del kwargs["geographies"]
     del kwargs["questions"]
-    del kwargs["variants"]
+    if "variants" in kwargs:
+        del kwargs["variants"]
 
     with Session(_engine) as session:
         map_config = MapConfig(**kwargs)
@@ -90,14 +101,15 @@ def _load_map(**kwargs) -> MapConfig:
             question = session.scalars(
                 select(Question).where(Question.id == qid)
             ).first()
-            map_config.questions.append(question)
+            if question:
+                map_config.questions.append(question)
 
         # link variants
         for variant_id, variant_config in raw_variants.items():
             map_variant = MapConfigVariant(
                 id=f"{map_config.id}-{variant_id}",
                 map_config=map_config,
-                variant=variant_id,
+                variant_id=variant_id,
             )
             session.add(map_variant)
 
@@ -153,13 +165,12 @@ def init_db(engine: Engine, model_dir: PathLike, drop=False, skip_maps=False) ->
 
     # load Sources
     if _has_new_files(sources_dir, Source):
-        print("loading new Sources")
+        print("Loading new Sources...")
         _init_model(sources_dir, _load_source)
 
     # load Geographies
     if _has_new_files(geogs_dir, Geography):
-        print("loading new Geographies")
-        _load_geog()
+        print("Loading new Geographies...")
         _init_model(geogs_dir, _load_geog)
 
         # link geogs
@@ -182,12 +193,12 @@ def init_db(engine: Engine, model_dir: PathLike, drop=False, skip_maps=False) ->
 
     # load Questions
     if _has_new_files(questions_dir, Question):
-        print("loading new Questions")
+        print("Loading new Questions...")
         _init_model(questions_dir, _load_question)
 
     # load Maps
     if not skip_maps and _has_new_files(maps_dir, MapConfig):
-        print("loading new Maps")
+        print("Loading new Maps...")
         _init_model(maps_dir, _load_map)
 
     return _engine

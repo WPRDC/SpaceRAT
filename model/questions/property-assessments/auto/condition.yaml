@@ -1,0 +1,6 @@
+id: condition
+name: Dwelling - Condition
+datatype: discrete
+source: property-assessments
+value_select: |-
+  "CONDITION"

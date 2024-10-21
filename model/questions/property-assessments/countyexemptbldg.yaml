@@ -1,4 +1,7 @@
 id: countyexemptbldg
 name: County Exempt Building Amount
+description: The amount of assessment reduction granted on a building by the County (for county taxes only) under incentive programs for new construction, building improvements or local economic revitalization.
 datatype: continuous
 source: property-assessments
+value_select: |-
+  "COUNTYEXEMPTBLDG"

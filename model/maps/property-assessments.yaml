@@ -1,6 +1,6 @@
 id: property-assessments
 name: Property Assessments
-description: TBD
+description: Compare indicators about assessed property values as well as basic features of parcels, like construction material, condition and size.
 source: property-assessments
 geographies:
   - neighborhood
@@ -9,6 +9,7 @@ geographies:
 questions:
   - lotarea
   - saledate
+  - saleprice
   - countybuilding
   - countyland
   - countytotal
@@ -18,17 +19,22 @@ questions:
   - fairmarketbuilding
   - fairmarketland
   - fairmarkettotal
-  - countyexemptbldg
 variants:
   owner_occupied:
     questions:
-      - fullbaths
-      - halfbaths
-      - finishedlivingarea
+      - new-construction
   residential:
     questions:
-      - fullbaths
-      - halfbaths
-      - finishedlivingarea
+      - new-construction
   commercial:
   industrial:
+  has_sold:
+    questions:
+      - sale-date
+      - sale-price
+  has_building:
+    questions:
+      - brick
+      - yearblt
+      - new-construction
+  vacant:

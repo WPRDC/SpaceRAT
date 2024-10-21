@@ -1,4 +1,0 @@
-id: taxcode
-name: Tax Status
-datatype: discrete
-source: property-assessments

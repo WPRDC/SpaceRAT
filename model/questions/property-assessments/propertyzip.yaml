@@ -1,4 +1,0 @@
-id: propertyzip
-name: Property Location Zip code, first 5 digits
-datatype: discrete
-source: property-assessments

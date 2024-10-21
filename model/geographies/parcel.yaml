@@ -18,12 +18,19 @@ query: >
          sub.address,
          sub.owner_address,
          sub.owner_occupied,
+         sub.is_vacant,
+         sub.has_sold,
          sub.geom,
          sub.centroid,
          (sub.parcel_id || ' '::text) || sub.address  AS _full_text
   FROM (SELECT assessment."PARID"                                  AS parcel_id,
                boundary."MAPBLOCKLO"                               AS block_lot,
                assessment."CLASSDESC"                              AS class,
+            
+               assessment."STYLE" IS NULL                          AS is_vacant,
+  
+               assessment."SALEDATE" IS NOT NULL                   AS has_sold, 
+  
                assessment."PROPERTYHOUSENUM"                       AS housenum,
                assessment."PROPERTYFRACTION"                       AS fraction,
                assessment."PROPERTYUNIT"                           AS unit,
@@ -58,14 +65,41 @@ query: >
                  JOIN "3f50d47a-ab54-4da2-9f03-8519006e9fc9" boundary
                       ON assessment."PARID" = boundary."PIN") sub;
 variants:
-  residential: >
-    "class" LIKE 'RESIDENTIAL'
-  commercial: >
-    "class" LIKE 'COMMERCIAL'
-  industrial: >
-    "class" LIKE 'INDUSTRIAL'
-  owner_occupied: >
-    "owner_occupied"
+  residential:
+    name: Residential
+    description: Parcels designated "residential" use class
+    where_clause: >
+      "class" LIKE 'RESIDENTIAL'
+  commercial:
+    name: Commercial
+    description: Parcels designated "commercial" use class
+    where_clause: >
+      "class" LIKE 'COMMERCIAL'
+  industrial:
+    name: Industrial
+    description: Parcels designated "industrial" use class
+    where_clause: >
+      "class" LIKE 'INDUSTRIAL'
+  owner_occupied:
+    name: Owner-occupied
+    description: Parcels where the owner is the primary resident.
+    where_clause: >
+      "owner_occupied"
+  has_sold:
+    name: Has sale recorded
+    description: Parcels with a recorded sale in the data
+    where_clause: >
+      has_sold
+  has_building:
+    name: Has a building
+    description: Parcels with buildings on them
+    where_clause: >
+      NOT is_vacant
+  vacant:
+    name: Vacant lot
+    description: Parcels that have no buildings
+    where_clause: >
+      is_vacant
 filters:
   by_owner: >
     "owner_address" ILIKE %s
@@ -75,3 +109,6 @@ trigram_indexes:
   - owner_address
   - lower(address)
   - lower(owner_address)
+extra_fields:
+  - address
+  - owner_address

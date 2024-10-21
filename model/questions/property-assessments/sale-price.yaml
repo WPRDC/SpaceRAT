@@ -1,0 +1,7 @@
+id: sale-price
+name: Price of last sale
+description: Amount paid for the parcel for it's most recent sale.
+datatype: continuous
+source: property-assessments
+value_select: |-
+  "SALEPRICE"

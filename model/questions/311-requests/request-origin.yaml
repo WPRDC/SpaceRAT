@@ -1,0 +1,6 @@
+id: request-origin
+name: Request origin
+datatype: discrete
+source: 311-requests
+value_select: |-
+  "REQUEST_ORIGIN"

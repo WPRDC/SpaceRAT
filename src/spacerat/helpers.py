@@ -69,7 +69,13 @@ def parse_period_name(period_name: str) -> timedelta:
 
 
 def get_aggregate_fields(question: "Question") -> str:
+    """
+    Creates a string of aggregate select statements for use in top-level of main query.
+    :param question:
+    :return:
+    """
     field_name = question.field_name
+    # continuous works for continuous values
     if question.datatype == "continuous":
         return f"""
           AVG({field_name})                                          as {field_name}__mean,
@@ -85,6 +91,22 @@ def get_aggregate_fields(question: "Question") -> str:
 
           SUM({field_name})                                          as {field_name}__sum,
           COUNT(*)                                                   as {field_name}__n
+        """
+
+    # date types have some limits right now
+    if question.datatype == "date":
+        return f"""
+          MIN({field_name})                                          as {field_name}__min,
+          MAX({field_name})                                          as {field_name}__max,
+          COUNT(*)                                                   as {field_name}__n
+        """
+
+    # boolean datatypes are count of true
+    if question.datatype == "boolean":
+        return f"""
+          COUNT(*) FILTER (WHERE {field_name})  as {field_name}__count,
+          (COUNT(*) FILTER (WHERE {field_name})::float / COUNT(*)::float) as {field_name}__percent,
+          COUNT(*)                              as {field_name}__n
         """
 
     # discrete can only do mode and count

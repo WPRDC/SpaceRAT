@@ -70,4 +70,15 @@ TemporalDomain = Literal[
 ]
 
 
-DataType = Literal["continuous", "discrete", "boolean"]
+DataType = Literal["continuous", "discrete", "boolean", "date"]
+
+# possible formats to use on frontend for values
+ValueFormat = Literal[
+    "number",  # user's locale number format (e.g. en-US: 1,337.01)
+    "raw",  # raw string of value (good for years)
+    "money",  # user's local currency format (e.g. en-US: $1,337.00)
+    "date",  # user's locale data format (e.g. en-US: 1/13/1999)
+    "datetime",  # user's locale datetime form (e.g. en-US: 4/30/2005, 1:33:21 PM)
+    "isodatetime",  # prints iso datetime format (e.g. 2005-04-30)
+    "scientific",  # 🧪
+]
