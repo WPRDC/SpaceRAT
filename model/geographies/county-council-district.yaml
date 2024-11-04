@@ -1,0 +1,11 @@
+id: county-council
+name: County Council District
+table: county_council_district_index
+subgeographies:
+  - parcel
+query: >
+  SELECT "District"         as id,
+         "LABEL"            as name,
+         _geom              as geom,
+         st_setsrid(st_centroid(_geom), 4326) as centroid
+  FROM "501b2f84-ac1c-40a3-8099-e4e431f993df"

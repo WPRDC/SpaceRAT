@@ -1,10 +1,11 @@
-id: property-assessments
+id: assessments
 name: Property Assessments
 description: Compare indicators about assessed property values as well as basic features of parcels, like construction material, condition and size.
 source: property-assessments
 geographies:
-  - neighborhood
-  - county-subdivision
+  - hood
+  - county-sub
+  - county-council
   - county
 questions:
   - lotarea

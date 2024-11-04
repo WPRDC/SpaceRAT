@@ -267,7 +267,7 @@ class SpaceRAT:
 
             # make map for each variant
             for map_variant in map_config.variants:
-                name = map_config.get_view_name(geog.id, variant_id=map_variant.id)
+                name = map_config.get_view_name(geog.id, variant_id=map_variant.variant_id)
                 variant_questions = [q.id for q in map_variant.questions]
                 self.create_map_table(
                     geog.id,

@@ -274,6 +274,8 @@ def update_maps(ctx: click.Context, map_id: str, replace):
 
     if validate_write_setup(rat):
         rat.update_maps(map_id, replace=replace)
+    else:
+        click.echo(_bold("Error!", fg="red"))
 
     click.echo(_bold("Done!", fg="green"))
 

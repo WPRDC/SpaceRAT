@@ -3,7 +3,7 @@ name: PLI Building Permits
 table: pli_permits
 
 spatial_resolution: parcel
-spatial_domain: county-subdivision.4200361000 # city of pittsburgh
+spatial_domain: county-sub.4200361000 # city of pittsburgh
 
 temporal_resolution: month
 temporal_domain_name: current

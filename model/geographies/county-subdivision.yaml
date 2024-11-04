@@ -1,8 +1,8 @@
-id: county-subdivision
+id: county-sub
 name: County Subdivision
 table: county_subdivision_index
 subgeographies:
-  - neighborhood
+  - hood
   - tract
   - blockgroup
   - parcel

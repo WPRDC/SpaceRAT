@@ -495,6 +495,7 @@ class MapConfig(Serializable, Base):
         source = slugify(self.source_id, separator="_")
         geog = slugify(geog_id, separator="_")
         variant = slugify(variant_id, separator="_") if variant_id else ""
+        print(variant_id)
         return f"map__{source}__{geog}__{variant}".rstrip("_")
 
     def tile_jsons(self, variant: str = None) -> dict:
