@@ -195,7 +195,7 @@ class SpaceRAT:
 
         # (re)create materialized view
         if replace:
-            self._write_to_db(f"DROP MATERIALIZED VIEW IF EXISTS {table}")
+            self._write_to_db(f"DROP MATERIALIZED VIEW IF EXISTS {table} CASCADE")
         self._write_to_db(f"""CREATE MATERIALIZED VIEW {table} AS {geog.query}""")
 
         # set permissions
@@ -267,7 +267,9 @@ class SpaceRAT:
 
             # make map for each variant
             for map_variant in map_config.variants:
-                name = map_config.get_view_name(geog.id, variant_id=map_variant.variant_id)
+                name = map_config.get_view_name(
+                    geog.id, variant_id=map_variant.variant_id
+                )
                 variant_questions = [q.id for q in map_variant.questions]
                 self.create_map_table(
                     geog.id,
@@ -593,7 +595,6 @@ class SpaceRAT:
             q.value_clause for q in questions
         ]  # [ '"source_field_name" as "question_field_name"', ... ]
 
-
         source_query = f"""
               SELECT ({source.region_select})  as "region",
                      ({source.time_select})    as "time",
@@ -644,11 +645,12 @@ class SpaceRAT:
         inner_where_clause = f"WHERE {filters} " if has_filters else ""
 
         # pull extra fields from subgeog (e.g. address of parcel)
-        extra_fields_select_clause: str  = ''
+        extra_fields_select_clause: str = ""
         if subgeog.extra_fields:
-            extra_fields_select_clause += ', '
-            extra_fields_select_clause +=  ", ".join([f'subgeogs.{extra_field}' for extra_field in subgeog.extra_fields])
-
+            extra_fields_select_clause += ", "
+            extra_fields_select_clause += ", ".join(
+                [f"subgeogs.{extra_field}" for extra_field in subgeog.extra_fields]
+            )
 
         # todo: replace all with SQLAlchemy once we know what we're doin'
         # generate query that results in region, parent table and is limited to the source's spatial domain
@@ -914,7 +916,7 @@ class SpaceRAT:
         with psycopg2.connect(self.source_write_url) as conn:
             qry = str(re.sub(r"\s+", " ", q).strip())
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-                print(qry)
+                print("🆒", qry)
                 cur.execute(qry, params)
         conn.close()
 

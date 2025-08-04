@@ -17,6 +17,7 @@ query: >
          sub.zip,
          sub.address,
          sub.owner_address,
+         sub.year_built,
          sub.owner_occupied,
          sub.is_vacant,
          sub.has_sold,
@@ -27,7 +28,7 @@ query: >
                boundary."MAPBLOCKLO"                               AS block_lot,
                assessment."CLASSDESC"                              AS class,
             
-               assessment."STYLE" IS NULL                          AS is_vacant,
+               assessment."FAIRMARKETBUILDING" < 1000              AS is_vacant,
   
                assessment."SALEDATE" IS NOT NULL                   AS has_sold, 
   
@@ -46,7 +47,9 @@ query: >
                        assessment."CHANGENOTICEADDRESS4",
                        '\s+', ' ', 'g')
                )                                                   as owner_address,
-
+              
+                assessment."YEARBLT"                                 as year_built,
+              
                trim(regexp_replace(
                        assessment."PROPERTYHOUSENUM" || ' ' ||
                        assessment."PROPERTYADDRESS" || ' ' ||
@@ -57,10 +60,11 @@ query: >
                )                                                   AS address,
 
                (assessment."HOMESTEADFLAG" IS NOT NULL
-                   OR assessment."CHANGENOTICEADDRESS1" ILIKE assessment."PROPERTYHOUSENUM" ||
-                                                              '%') AS owner_occupied,
+                   OR assessment."CHANGENOTICEADDRESS1" ILIKE assessment."PROPERTYHOUSENUM" || '%') AS owner_occupied,
+  
                boundary._geom                                      AS geom,
-               st_setsrid(st_centroid(boundary._geom), 4326)                         AS centroid
+  
+               st_setsrid(st_centroid(boundary._geom), 4326)       AS centroid
         FROM "65855e14-549e-4992-b5be-d629afc676fa" assessment
                  JOIN "3f50d47a-ab54-4da2-9f03-8519006e9fc9" boundary
                       ON assessment."PARID" = boundary."PIN") sub;

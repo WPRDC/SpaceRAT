@@ -323,8 +323,11 @@ print_records(
 
 
 ## Setup db
+*replace variables with ure write and read roles*
 ```postgresql
-grant usage on schema spacerat to datastore;
+grant usage on schema spacerat to $READ_USER;
 
-grant select on all tables in schema spacerat to datastore;
+grant select on all tables in schema spacerat to $READ_USER;
+
+ ALTER DEFAULT PRIVILEGES FOR USER $WRITE_USER IN SCHEMA spacerat GRANT SELECT ON TABLES TO $READ_USER;
 ```
